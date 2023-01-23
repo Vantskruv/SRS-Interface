@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="utf-8" />
+	<title>com.vantdev.srsinterface.radiodata</title>
+	<link rel="stylesheet" href="css/sdpi.css" />
+</head>
+
+<body>
+	<div class="sdpi-wrapper">
+		<div type="checkbox" class="sdpi-item">
+			<input class="sdpi-item-value" id="showSelectedRadio" type="checkbox" onclick="sendValueToPlugin(event.target.checked, 'selectedRadio')">
+			<label for="showSelectedRadio"><span></span>Show only data for the currently selected radio.</label>
+		</div>
+
+		<div class="sdpi-heading">Radio channel</div>
+		<div type="group" class="sdpi-item" id="defaultOptionsGroup">
+			<div class="sdpi-item">
+				<div class="sdpi-item-label">Channel</div>
+				<input type="number" class="sdpi-item-value" id="radioSlot" value="1">
+			</div>
+			<br>
+			<div class="sdpi-item">
+				<button class="sdpi-item-value" onclick="sendValueToPlugin(document.getElementById('radioSlot').value, 'radioSlot')">Set radio channel</button>
+			</div>
+		</div>
+		<hr>
+		
+		<div class="sdpi-heading">Radio appearance</div>
+		<div type="radio" class="sdpi-item" id="radioAppearanceOptions">
+			<div class="sdpi-item-value ">
+				<span class="sdpi-item-child">
+					<input id="onlyRadioNameAndFrequency" type="radio" name="rdio" checked onclick="sendValueToPlugin(0, 'radioAppearanceOptions')">
+					<label for="onlyRadioNameAndFrequency" class="sdpi-item-label"><span></span>Only radio name and frequency</label>
+				</span>
+				<br>
+				<span class="sdpi-item-child">
+					<input id="senderNameOnTop" type="radio" name="rdio" onclick="sendValueToPlugin(1, 'radioAppearanceOptions')">
+					<label for="senderNameOnTop" class="sdpi-item-label"><span></span>As above, but show sender name on transmission</label>
+				</span>
+				<br>
+				<span class="sdpi-item-child">
+					<input id="showOnlySenderName" type="radio" name="rdio" onclick="sendValueToPlugin(2, 'radioAppearanceOptions')">
+					<label for="showOnlySenderName" class="sdpi-item-label"><span></span>Only sender name</label>
+				</span>
+				<span class="sdpi-item-child">
+					<input id="showOnlySenderNameAndKeep" type="radio" name="rdio" onclick="sendValueToPlugin(3, 'radioAppearanceOptions')">
+					<label for="showOnlySenderNameAndKeep" class="sdpi-item-label"><span></span>As above, but always keep latest sender name visible</label>
+				</span>
+			</div>
+		</div>
+		<br> 	
+		<div type="checkbox" class="sdpi-item">
+			<input class="sdpi-item-value" id="showOnlyBlackBackground" type="checkbox" onclick="sendValueToPlugin(event.target.checked, 'showOnlyBlackBackground')">
+			<label for="showOnlyBlackBackground"><span></span>Show only black background color</label>
+		</div>
+		<hr>
+		<br>
+		
+		<div class="sdpi-heading">Special sender name settings</div>
+		Regex for sender name.
+		<br>
+		Example---
+		Remove characters within brackets [], <> and ():
+		<br>
+		\[.*?\]|\(.*?\)|\<.*?\>
+		<br><br>
+		Leave empty if you do not want to parse the sender name.
+		<br>
+		<div class="sdpi-item">
+			<input class="sdpi-item-value" id="senderNameRegex" placeholder="Regex value" value="">
+		</div>
+		<br>
+		<div class="sdpi-item">
+			<button class="sdpi-item-value" onclick="sendValueToPlugin(document.getElementById('senderNameRegex').value, 'senderNameRegex')">Set regex expression</button>
+		</div>
+		<div type="checkbox" class="sdpi-item">
+			<input class="sdpi-item-value" id="removeSpaces" type="checkbox" onclick="sendValueToPlugin(event.target.checked, 'removeSpaces')">
+			<label for="removeSpaces"><span></span>Remove all spaces in sender name</label>
+		</div>
+		<div type="checkbox" class="sdpi-item">
+			<input class="sdpi-item-value" id="removeSpecialCharacters" type="checkbox" onclick="sendValueToPlugin(event.target.checked, 'removeSpecialCharacters')">
+			<label for="removeSpecialCharacters"><span></span>Allow only A-Z/a-z/1-9 in sender name</label>
+		</div>
+		<div class="sdpi-item">
+			<div class="sdpi-item-label">Sender name line breakage: </div>
+			<input type="number" class="sdpi-item-value" id="senderNameLineBreakage" placeholder = "Set to 0 to disable line breakage" value="5">
+		</div>
+		<br>
+		<div class="sdpi-item">
+			<button class="sdpi-item-value" onclick="sendValueToPlugin(document.getElementById('senderNameLineBreakage').value, 'senderNameLineBreakage')">Set line breakage</button>
+		</div>
+		<hr>
+				
+		<!-- END OF SDPI-WRAPPER -->
+	</div>
+	
+	<script src="radiodata.js"></script>
+	
+<!--
+		<script src="js/common.js"></script>
+		<script src="js/common_pi.js"></script>
+		<script src="js/r3esd_index.js"></script>
+		<script src="js/custom_functions.js"></script>
+-->
+</body>
+
+</html>

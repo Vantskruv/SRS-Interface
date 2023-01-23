@@ -1,0 +1,230 @@
+{
+    "ClientCountConnected": 9,
+    "RadioInfo": {
+        "capabilities": {
+            "dcsIFF": false,
+            "dcsPtt": false,
+            "dcsRadioSwitch": false,
+            "desc": null,
+            "intercomHotMic": false
+        },
+        "iff": {
+            "control": 2,
+            "mic": -1,
+            "mode1": -1,
+            "mode3": -1,
+            "mode4": false,
+            "status": 0
+        },
+        "radios": [
+            {
+                "channel": -1,
+                "enc": false,
+                "encKey": 0,
+                "encMode": 0,
+                "freq": 100.0,
+                "modulation": 2,
+                "name": "SATCOM",
+                "retransmit": false,
+                "secFreq": 0.0,
+                "simul": false,
+                "volume": 1.0
+            },
+            {
+                "channel": -1,
+                "enc": false,
+                "encKey": 0,
+                "encMode": 0,
+                "freq": 166600000.0,
+                "modulation": 1,
+                "name": "N├ûD",
+                "retransmit": false,
+                "secFreq": 156800000.0,
+                "simul": false,
+                "volume": 1.0
+            },
+            {
+                "channel": -1,
+                "enc": false,
+                "encKey": 1,
+                "encMode": 1,
+                "freq": 153000000.0,
+                "modulation": 1,
+                "name": "OPEN",
+                "retransmit": false,
+                "secFreq": 156800000.0,
+                "simul": false,
+                "volume": 1.0
+            },
+            {
+                "channel": -1,
+                "enc": false,
+                "encKey": 1,
+                "encMode": 1,
+                "freq": 162500000.0,
+                "modulation": 1,
+                "name": "REAV",
+                "retransmit": false,
+                "secFreq": 156800000.0,
+                "simul": false,
+                "volume": 1.0
+            },
+            {
+                "channel": -1,
+                "enc": false,
+                "encKey": 1,
+                "encMode": 1,
+                "freq": 162525000.0,
+                "modulation": 1,
+                "name": "ALPHA",
+                "retransmit": false,
+                "secFreq": 144000000.0,
+                "simul": false,
+                "volume": 1.0
+            },
+            {
+                "channel": -1,
+                "enc": false,
+                "encKey": 1,
+                "encMode": 1,
+                "freq": 162550000.0,
+                "modulation": 1,
+                "name": "BRAVO",
+                "retransmit": false,
+                "secFreq": 144000000.0,
+                "simul": false,
+                "volume": 1.0
+            },
+            {
+                "channel": -1,
+                "enc": false,
+                "encKey": 1,
+                "encMode": 1,
+                "freq": 144000000.0,
+                "modulation": 1,
+                "name": "Trafik 3",
+                "retransmit": false,
+                "secFreq": 144000000.0,
+                "simul": false,
+                "volume": 0.5
+            },
+            {
+                "channel": -1,
+                "enc": false,
+                "encKey": 1,
+                "encMode": 1,
+                "freq": 144000000.0,
+                "modulation": 1,
+                "name": "Trafik 4",
+                "retransmit": false,
+                "secFreq": 144000000.0,
+                "simul": false,
+                "volume": 0.5
+            },
+            {
+                "channel": -1,
+                "enc": false,
+                "encKey": 1,
+                "encMode": 1,
+                "freq": 144000000.0,
+                "modulation": 1,
+                "name": "Trafik 5",
+                "retransmit": false,
+                "secFreq": 144000000.0,
+                "simul": false,
+                "volume": 0.5
+            },
+            {
+                "channel": -1,
+                "enc": false,
+                "encKey": 1,
+                "encMode": 1,
+                "freq": 144000000.0,
+                "modulation": 1,
+                "name": "Trafik 6",
+                "retransmit": false,
+                "secFreq": 144000000.0,
+                "simul": false,
+                "volume": 0.5
+            },
+            {
+                "channel": -1,
+                "enc": false,
+                "encKey": 1,
+                "encMode": 1,
+                "freq": 144000000.0,
+                "modulation": 1,
+                "name": "Trafik 7",
+                "retransmit": false,
+                "secFreq": 144000000.0,
+                "simul": false,
+                "volume": 0.5
+            }
+        ],
+        "selected": 3,
+        "simultaneousTransmissionControl": 1,
+        "unit": "External AWACS",
+        "unitId": 100000001
+    },
+    "RadioReceivingState": [
+		{
+            "IsReceiving": true,
+            "IsSecondary": false,
+            "IsSimultaneous": false,
+            "ReceivedOn": 0,
+            "SentBy": "<Swetrust>GTXOla"
+        },
+        {
+            "IsReceiving": true,
+            "IsSecondary": false,
+            "IsSimultaneous": false,
+            "ReceivedOn": 1,
+            "SentBy": "<Moonshine Mining> DarkMermaid"
+        },
+        {
+            "IsReceiving": true,
+            "IsSecondary": false,
+            "IsSimultaneous": false,
+            "ReceivedOn": 2,
+            "SentBy": "<SexyNaked>dnobr"
+        },
+        {
+            "IsReceiving": true,
+            "IsSecondary": false,
+            "IsSimultaneous": false,
+            "ReceivedOn": 3,
+            "SentBy": "<Reavers> RobHunter"
+        },
+        {
+            "IsReceiving": true,
+            "IsSecondary": true,
+            "IsSimultaneous": false,
+            "ReceivedOn": 4,
+            "SentBy": "<org ID> in-game handle"
+        },
+        null,
+        null,
+        null,
+        null,
+        null,
+        null
+    ],
+    "RadioSendingState": {
+        "IsEncrypted": 0,
+        "IsSending": false,
+        "SendingOn": 3
+    },
+    "TunedClients": [
+        7,
+        6,
+        5,
+        2,
+        2,
+        2,
+        5,
+        5,
+        5,
+        5,
+        5
+    ]
+}

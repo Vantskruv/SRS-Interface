@@ -1,0 +1,8 @@
+{
+  "Description": "Displays the current CPU usage.", 
+  "Name": "SRSInterface", 
+  "com.vantdev.srsinterface.uuid_3": {
+    "Name": "SRSInterface_1", 
+    "Tooltip": "This action displays the CPU usage"
+  }
+}

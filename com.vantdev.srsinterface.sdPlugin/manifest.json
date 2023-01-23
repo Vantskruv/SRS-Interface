@@ -1,0 +1,38 @@
+{
+  "Actions": [
+    {
+      "Icon": "srs_icon", 
+      "Name": "SRS Radio", 
+      "States": [
+        {
+          "Image": "BLACK",
+          "TitleAlignment": "middle", 
+          "FontSize": "15"
+        }
+      ], 
+      "SupportedInMultiActions": false,
+      "Tooltip": "Display and control radio data from DCS SimpleRadio.", 
+      "UUID": "com.vantdev.srsinterface.radiodata",
+	  "PropertyInspectorPath": "propertyinspector/radiodata.html"
+    }
+  ], 
+  "SDKVersion": 2,
+  "Category": "SRS Interface",
+  "CategoryIcon": "srs_icon",
+  "Author": "Vantskruv", 
+  "CodePath": "srsinterface.exe", 
+  "Description": "Displays radio data from DCS SimpleRadio.", 
+  "Name": "SRS Interface", 
+  "Icon": "srs_icon", 
+  "URL": "", 
+  "Version": "1.3",
+  "OS": [
+    {
+        "Platform": "windows", 
+        "MinimumVersion" : "10"
+    }
+  ],
+  "Software": {
+	  "MinimumVersion": "5.0"
+  }
+}
