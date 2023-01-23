@@ -178,7 +178,6 @@
     <ClInclude Include="..\Common\ESDSDKDefines.h" />
     <ClInclude Include="..\Common\ESDUtilities.h" />
     <ClInclude Include="..\srsinterfaceplugin.h" />
-    <ClInclude Include="nlohmann\json.hpp" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="SRSInterface.h" />
   </ItemGroup>
