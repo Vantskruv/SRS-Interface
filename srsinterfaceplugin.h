@@ -12,6 +12,8 @@
 
 #include "Common/ESDBasePlugin.h"
 #include <mutex>
+#include <thread>
+#include <atomic>
 
 
 
@@ -34,7 +36,7 @@ public:
 	void DeviceDidConnect(const std::string& inDeviceID, const json &inDeviceInfo) override;
 	void DeviceDidDisconnect(const std::string& inDeviceID) override;
 
-	void UpdateData(const json& jsonData);
+	void UpdateSRSData(const class SRSData* srsData);
 
 private:
 	
@@ -45,6 +47,6 @@ private:
 	bool radioChange = false; // Update radios if there is a settings change
 
 	void SetRadioToContext(const std::string& context, const std::string& str, bool isSending, bool isRecieving, bool isSelected, bool regexError);
-	void UpdateContext(std::pair<const std::string, class SRSActionSettings>& itemContext, int currentRadio, bool isSending, int selectedRadio, const json& jsonRadios, const std::multimap<int, std::string>& radiosReceiving);
+	void UpdateContext(std::pair<const std::string, class SRSActionSettings>& itemContext, int currentRadio, bool isSending, int selectedRadio, const json& jsonRadios, const std::multimap<int, std::string>& radiosReceiving, int numberOfClients);
 
 };

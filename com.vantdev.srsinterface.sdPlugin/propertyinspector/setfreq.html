@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="utf-8" />
+	<title>com.vantdev.srsinterface.setfreq</title>
+	<link rel="stylesheet" href="css/sdpi.css" />
+</head>
+
+<body>
+	<div class="sdpi-wrapper">
+		<div type="checkbox" class="sdpi-item">
+			<input class="sdpi-item-value" id="showSelectedRadio" type="checkbox" onclick="sendValueToPlugin(event.target.checked, 'selectedRadio')">
+			<label for="showSelectedRadio"><span></span>Change frequency for selected radio.</label>
+		</div>
+
+		<div class="sdpi-heading">Radio channel</div>
+		<div type="group" class="sdpi-item" id="defaultOptionsGroup">
+			<div class="sdpi-item">
+				<div class="sdpi-item-label">Channel</div>
+				<input type="number" class="sdpi-item-value" id="radioSlot" value="1">
+			</div>
+			<br>
+			<div class="sdpi-item">
+				<button class="sdpi-item-value" onclick="sendValueToPlugin(parseInt(document.getElementById('radioSlot').value), 'radioSlot')">Set radio channel</button>
+			</div>
+		</div>
+		<hr>
+
+		<div class="sdpi-heading">Radio frequency incremention</div>
+		<i>
+			To increase the frequency, set a value of i.e. 0.025<br>
+			To decrease, assign a negative value.<br />
+			I.e. to decrease a current frequency of 162.500 to 162.250, set the field to:<br />
+			-0.25<br />
+		</i>
+		<div class="sdpi-item">
+			<input class="sdpi-item-value" id="radioIncremention" value="0.025">
+		</div>
+		<br>
+		<div class="sdpi-item">
+			<button class="sdpi-item-value" onclick="sendValueToPlugin(document.getElementById('radioIncremention').value, 'radioIncremention')">Set frequency incremention</button>
+		</div>
+		<hr>
+		<!-- END OF SDPI-WRAPPER -->
+	</div>
+	
+	<script src="setfreq.js"></script>
+
+</body>
+
+</html>

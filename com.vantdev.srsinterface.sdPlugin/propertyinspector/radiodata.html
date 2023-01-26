@@ -50,15 +50,25 @@
 				</span>
 			</div>
 		</div>
-		<br> 	
+		<div type="checkbox" class="sdpi-item">
+			<input class="sdpi-item-value" id="showNumberOfClients" type="checkbox" onclick="sendValueToPlugin(event.target.checked, 'showNumberOfClients')">
+			<label for="showNumberOfClients"><span></span>Show number of clients in channel instead of the freqenecy</label>
+		</div>
 		<div type="checkbox" class="sdpi-item">
 			<input class="sdpi-item-value" id="showOnlyBlackBackground" type="checkbox" onclick="sendValueToPlugin(event.target.checked, 'showOnlyBlackBackground')">
 			<label for="showOnlyBlackBackground"><span></span>Show only black background color</label>
 		</div>
 		<hr>
 		<br>
-		
 		<div class="sdpi-heading">Special sender name settings</div>
+		<div type="checkbox" class="sdpi-item">
+			<input class="sdpi-item-value" id="removeSpaces" type="checkbox" onclick="sendValueToPlugin(event.target.checked, 'removeSpaces')">
+			<label for="removeSpaces"><span></span>Remove all spaces in sender name</label>
+		</div>
+		<div type="checkbox" class="sdpi-item">
+			<input class="sdpi-item-value" id="removeSpecialCharacters" type="checkbox" onclick="sendValueToPlugin(event.target.checked, 'removeSpecialCharacters')">
+			<label for="removeSpecialCharacters"><span></span>Allow only A-Z/a-z/1-9 in sender name</label>
+		</div>
 		Regex for sender name.
 		<br>
 		Example---
@@ -75,21 +85,16 @@
 		<div class="sdpi-item">
 			<button class="sdpi-item-value" onclick="sendValueToPlugin(document.getElementById('senderNameRegex').value, 'senderNameRegex')">Set regex expression</button>
 		</div>
-		<div type="checkbox" class="sdpi-item">
-			<input class="sdpi-item-value" id="removeSpaces" type="checkbox" onclick="sendValueToPlugin(event.target.checked, 'removeSpaces')">
-			<label for="removeSpaces"><span></span>Remove all spaces in sender name</label>
-		</div>
-		<div type="checkbox" class="sdpi-item">
-			<input class="sdpi-item-value" id="removeSpecialCharacters" type="checkbox" onclick="sendValueToPlugin(event.target.checked, 'removeSpecialCharacters')">
-			<label for="removeSpecialCharacters"><span></span>Allow only A-Z/a-z/1-9 in sender name</label>
-		</div>
+		Set the maximum number of letters per line shown from the senders alias name.
+		<br>
+		I.e. if the name has 15 letters, and a value of 5 is set, the name will be divided in three lines of 5 letters each.
 		<div class="sdpi-item">
-			<div class="sdpi-item-label">Sender name line breakage: </div>
 			<input type="number" class="sdpi-item-value" id="senderNameLineBreakage" placeholder = "Set to 0 to disable line breakage" value="5">
 		</div>
-		<br>
 		<div class="sdpi-item">
-			<button class="sdpi-item-value" onclick="sendValueToPlugin(parseInt(document.getElementById('senderNameLineBreakage').value), 'senderNameLineBreakage')">Set line breakage</button>
+			<button class="sdpi-item-value" onclick="sendValueToPlugin(parseInt(document.getElementById('senderNameLineBreakage').value), 'senderNameLineBreakage')">
+			Set maximum letters per line
+			</button>
 		</div>
 		<hr>
 				
@@ -97,13 +102,7 @@
 	</div>
 	
 	<script src="radiodata.js"></script>
-	
-<!--
-		<script src="js/common.js"></script>
-		<script src="js/common_pi.js"></script>
-		<script src="js/r3esd_index.js"></script>
-		<script src="js/custom_functions.js"></script>
--->
+
 </body>
 
 </html>

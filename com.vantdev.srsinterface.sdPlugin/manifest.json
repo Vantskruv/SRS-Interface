@@ -1,27 +1,43 @@
 {
   "Actions": [
     {
-      "Icon": "srs_icon", 
-      "Name": "SRS Radio", 
+      "Icon": "srs_icon",
+      "Name": "SRS Radio",
       "States": [
         {
           "Image": "BLACK",
-          "TitleAlignment": "middle", 
+          "TitleAlignment": "middle",
           "FontSize": "15"
         }
-      ], 
+      ],
       "SupportedInMultiActions": false,
-      "Tooltip": "Display and control radio data from DCS SimpleRadio.", 
+      "Tooltip": "Display and change active radio from DCS SimpleRadio.",
       "UUID": "com.vantdev.srsinterface.radiodata",
-	  "PropertyInspectorPath": "propertyinspector/radiodata.html"
+      "PropertyInspectorPath": "propertyinspector/radiodata.html"
+    },
+    {
+      "Icon": "srs_icon",
+      "Name": "SRS Set Frequency",
+      "States": [
+        {
+          "Image": "BLACK",
+          "TitleAlignment": "middle",
+          "FontSize": "15"
+        }
+      ],
+      "SupportedInMultiActions": false,
+      "Tooltip": "Increase or decrease radio frequency in DCS SimpleRadio.",
+      "UUID": "com.vantdev.srsinterface.setfreq",
+      "PropertyInspectorPath": "propertyinspector/setfreq.html"
     }
+
   ], 
   "SDKVersion": 2,
   "Category": "SRS Interface",
   "CategoryIcon": "srs_icon",
   "Author": "Vantskruv", 
   "CodePath": "srsinterface.exe", 
-  "Description": "Displays radio data from DCS SimpleRadio.", 
+  "Description": "Displays and sets radio data from DCS SimpleRadio.", 
   "Name": "SRS Interface", 
   "Icon": "srs_icon", 
   "URL": "", 

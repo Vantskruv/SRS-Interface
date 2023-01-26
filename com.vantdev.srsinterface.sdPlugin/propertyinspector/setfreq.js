@@ -38,7 +38,8 @@ function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegist
 	loadConfiguration(actionInfo.payload.settings);
 }
 
-function getProperty(object, property, defaultValue) {
+function getProperty(object, property, defaultValue)
+{
 	if (object[property] != undefined) return object[property];
 	return defaultValue;
 }
@@ -46,40 +47,20 @@ function getProperty(object, property, defaultValue) {
 function loadConfiguration(payload)
 {
 	let showSelectedRadio = document.getElementById("showSelectedRadio");
-	showSelectedRadio.checked = getProperty(payload, "selectedRadio", false);
+	showSelectedRadio.checked = getProperty(payload, "selectedRadio", true);
 
 	let radioSlot = document.getElementById("radioSlot");
-	radioSlot.value = getProperty(payload, "radioSlot", 1);
-		
-	let radioButtons = document.getElementsByName("rdio");
-	let radioAppearanceSelected = getProperty(payload, "radioAppearanceOptions", 0);
-	radioButtons[radioAppearanceSelected].checked = true;
+	radioSlot.value = getProperty(payload, "radioSlot", 1)
 
-	let showNumberOfClients = document.getElementById("showNumberOfClients");
-	showNumberOfClients.checked = getProperty(payload, "showNumberOfClients", false);
+	let radioIncremention = document.getElementById("radioIncremention");
+	radioIncremention.value = payload.radioIncremention;
+	radioIncremention.value = getProperty(payload, "radioIncremention", "0.025");
 
-	let showOnlyBlackBackground = document.getElementById("showOnlyBlackBackground");
-	showOnlyBlackBackground.checked = getProperty(payload, "showOnlyBlackBackground", false)
-	
-	let senderNameRegex = document.getElementById("senderNameRegex");
-	senderNameRegex.value = getProperty(payload, "senderNameRegex", "");
-	
-	let removeSpaces = document.getElementById("removeSpaces");
-	removeSpaces.checked = getProperty(payload, "removeSpaces", false);
-	
-	let removeSpecialCharacters = document.getElementById("removeSpecialCharacters");
-	removeSpecialCharacters.checked = getProperty(payload, "removeSpecialCharacters", false);
-		
-	let senderNameLineBreakage = document.getElementById("senderNameLineBreakage");
-	senderNameLineBreakage.value = getProperty(payload, "senderNameLineBreakage", 5);
-	
-	if(showSelectedRadio.checked)
-	{
+	if (showSelectedRadio.checked) {
 		let defaultOptionsGroup = document.getElementById("defaultOptionsGroup");
 		defaultOptionsGroup.style.display = "none";
 	}
-	else
-	{
+	else {
 		let defaultOptionsGroup = document.getElementById("defaultOptionsGroup");
 		defaultOptionsGroup.style.display = "block";
 	}
@@ -101,6 +82,7 @@ function sendValueToPlugin(value, param)
 			defaultOptionsGroup.style.display = "block";
 		}
 	}
+
 
 	if (websocket && (websocket.readyState === 1))
 	{
