@@ -18,6 +18,7 @@
 #include <array>
 #include <iomanip>
 #include <regex>
+#include <mutex>
 
 #include "Common/ESDConnectionManager.h"
 #include "Common/EPLJSONUtils.h"
@@ -33,42 +34,47 @@ static const std::string blueImage = "data:image/png;base64,iVBORw0KGgoAAAANSUhE
 // Keys for plugin settings.
 static const std::string RADIO_SLOT = "radioSlot";
 static const std::string SHOW_SELECTED_RADIO = "selectedRadio";
-static const std::string RADIO_APPEARANCE = "radioAppearanceOptions";
+static const std::string RADIO_CHANGE_FREQUENCY = "frequencyChange";
 static const std::string SHOW_ONLY_BLACK_BACKGROUND = "showOnlyBlackBackground";
-static const std::string SHOW_NUMBER_OF_CLIENTS = "showNumberOfClients";
 static const std::string SENDER_NAME_REGEX = "senderNameRegex";
 static const std::string SENDER_NAME_REMOVE_SPACES = "removeSpaces";
 static const std::string SENDER_NAME_REMOVE_SPECIAL_CHARACTERS = "removeSpecialCharacters";
 static const std::string SENDER_NAME_LINE_BREAKAGE = "senderNameLineBreakage";
 static const std::string RADIO_INCREMENTION = "radioIncremention";
+static const std::string RADIO_APPEARANCE_SETTINGS = "radioAppearanceSettings";
+static const std::string RADIO_APPEARANCE_ON_TRANSMISSION_SETTINGS = "radioAppearanceOnTransmissionSettings";
+
+static const int TAG_INVALID = -1;
+static const int TAG_STRING = 0;
+static const int TAG_RADIONAME = 1;
+static const int TAG_CLIENTS = 2;
+static const int TAG_SENDERNAME = 3;
+static const int TAG_FREQ = 4;
+static const int TAG_FREQMHZ = 5;
+static const int TAG_FREQKHZ = 6;
+static const int TAG_FREQINDEX = 7;
 
 
 class SRSActionSettings
 {
 public:
-	// Radio appearance values
-	static const int SHOW_ONLY_RADIO_NAME_AND_FREQUENCY = 0;
-	static const int SHOW_SENDER_NAME_ON_TOP = 1;
-	static const int SHOW_ONLY_SENDER_NAME = 2;
-	static const int SHOW_ONLY_SENDER_NAME_AND_KEEP = 3;
-
 	int radioSlot;
+	
+	std::vector<std::pair<int, std::string>> vLayout;
+	std::vector<std::pair<int, std::string>> vLayoutTransmission;
+	
 	bool isFrequencySetter = false;
-
 	double radioIncremention = 0.025;
 	
 	// Radio appearance settings 
 	bool showSelectedRadio = false;
-	int radioAppearance = SHOW_ONLY_RADIO_NAME_AND_FREQUENCY;
 	bool showOnlyBlackBackground = false;
-	bool showNumberOfClients = false;
-
+	
 	// Special sender name settings
 	std::string regexString;
 	bool removeAllSpacesInSenderName = false;
 	bool removeSpecialCharactersInSenderName = false;
 	int senderNameLineBreakage = 5;
-
 
 	bool regexError = false;
 	std::string latestSenderOnRadio;
@@ -137,17 +143,222 @@ bool GetJSON_Bool(const nlohmann::json& jsonObject, const std::string& key, bool
 }
 
 
-std::string ToContextFreqFormat(double freq)
+
+int ResolveTag(const std::string& strTag)
+{
+	std::string str = strTag;
+	std::transform(str.begin(), str.end(), str.begin(), ::toupper);
+	if (strcmp(str.c_str(), "RADIONAME") == 0) return TAG_RADIONAME;
+	else if (strcmp(str.c_str(), "CLIENTS") == 0) return TAG_CLIENTS;
+	else if (strcmp(str.c_str(), "SENDERNAME") == 0) return TAG_SENDERNAME;
+	else if (strcmp(str.c_str(), "FREQ") == 0) return TAG_FREQ;
+	else if (strcmp(str.c_str(), "FREQMHZ") == 0) return TAG_FREQMHZ;
+	else if (strcmp(str.c_str(), "FREQKHZ") == 0) return TAG_FREQKHZ;
+	else if (strcmp(str.substr(0, 9).c_str(), "FREQINDEX") == 0)
+	{
+		try
+		{
+			unsigned int freqIndex = std::stoul(strTag.substr(9));
+			return TAG_FREQINDEX + freqIndex;
+		}
+		catch (...)
+		{
+			return TAG_INVALID;
+		}
+	}
+	
+	return TAG_INVALID;
+}
+
+ bool ConstructLayout(const std::string& str, std::vector<std::pair<int, std::string>>& vLayout)
+{
+	if (str.empty()) return true;
+
+	std::string strBuffer;
+	std::string tagBuffer;
+	bool tagActive = false;
+
+	for (unsigned int i = 0; i < str.size(); i++)
+	{
+
+		if (str[i] == '\\')
+		{
+			if ((i + 1) < str.size() && (str[i+1] == ']' || str[i+1] == '['))
+			{
+				i++;
+			}
+		}
+		else if (str[i] == '[' && !tagActive)
+		{
+			if (!strBuffer.empty())
+			{
+				strBuffer.push_back('\0');
+				vLayout.push_back(std::make_pair(TAG_STRING, strBuffer));
+				strBuffer.clear();
+			}
+
+			tagActive = true;
+			continue;
+		}
+		else if (str[i] == ']' && tagActive)
+		{
+			DebugPrint("End of bracket: [%s]\n", tagBuffer.c_str());
+			tagBuffer.push_back('\0');
+			int tagType = ResolveTag(tagBuffer);
+			if (tagType == TAG_INVALID)
+			{
+				vLayout.clear();
+				return false;
+			}
+
+			vLayout.push_back(std::make_pair(tagType, ""));
+
+			tagBuffer.clear();
+			tagActive = false;
+			continue;
+		}
+
+		if (tagActive) tagBuffer.push_back(str[i]);
+		else strBuffer.push_back(str[i]);
+	}
+
+	if (!strBuffer.empty())
+	{
+		strBuffer.push_back('\0');
+		vLayout.push_back(std::make_pair(TAG_STRING, strBuffer));
+	}
+
+	return true;
+}
+
+ std::string parseSenderName(std::string str, bool removeAllSpaces, const std::string& regexString, bool removeSpecialCharacters, unsigned int lineBreakage)
+ {
+	 if (str.empty()) return "";
+
+	 // Remove all space characters
+	 if (removeAllSpaces) str.erase(std::remove_if(str.begin(), str.end(), ::isspace), str.end());
+
+	 if (!regexString.empty())
+	 {
+		 // Removes all data between[], () and <> including the correspondingly brackets.
+		 //std::regex regexExpression("\\[.*?\\]|\\(.*?\\)|\\<.*?\\>|\\{.*?\\}|\\|.*?\\|");
+		 std::regex regexExpression(regexString);
+		 str = std::regex_replace(str, regexExpression, "");
+	 }//if
+
+	 // Remove all characters that is not a..z/A..Z/1..9
+	 if (removeSpecialCharacters)
+	 {
+		 str.erase(std::remove_if(str.begin(), str.end(), [](const char& element)
+			 {
+				 if (std::isalnum(element) || std::isspace(element)) return false;
+				 return true;
+			 }), str.end());
+	 }
+
+	 // Insert a line breakage every 5:th character
+	 if (lineBreakage > 0)
+	 {
+		 for (auto it = str.begin(); (lineBreakage + 1) <= std::distance(it, str.end()); ++it)
+		 {
+			 std::advance(it, lineBreakage);
+			 it = str.insert(it, '\n');
+		 }
+	 }
+
+	 return str;
+ }
+
+
+std::string FreqToStr(double freq)
 {
 	freq = freq / 1000000.0;
 	std::stringstream ss;
 	ss << std::setprecision(3) << std::fixed << freq;
-	std::string rStr = ss.str();
-
-	size_t pointPos = rStr.find('.');
-
-	return rStr.substr(0, pointPos) + ".\n" + rStr.substr(pointPos + 1);
+	return ss.str();
 }
+
+
+void SRSInterfacePlugin::DrawContext(const std::string& context, unsigned int radio, const SRSData* srsData, const SRSActionSettings& as)
+{
+	std::string str;
+	if (radio < 0 || radio >= srsData->radioList.size()) return;
+
+	const SRSRadioData& radioData = srsData->radioList[radio];
+	const SRSActionSettings& radioSettings = mVisibleContexts[context];
+
+
+	const std::string* bgImage = &blackImage;
+	if (radioSettings.showOnlyBlackBackground);
+    else if (srsData->sendingRadio == radio)
+	{
+		bgImage = &greenImage;
+	}
+	else if (radioData.isRecieving)
+	{
+		bgImage = &redImage;
+	}
+	else if (srsData->selectedRadio == radio)
+	{
+		bgImage = &blueImage;
+	}
+	mConnectionManager->SetImage(*bgImage, context, kESDSDKTarget_HardwareAndSoftware);
+
+	const std::vector<std::pair<int, std::string>>* vLayout = &as.vLayout;
+	if (radioData.isRecieving && !as.vLayoutTransmission.empty()) vLayout = &as.vLayoutTransmission;
+
+	for (auto vI : *vLayout)
+	{
+		switch (vI.first)
+		{
+		case TAG_STRING:
+			str.append(vI.second);
+		break;
+		case TAG_RADIONAME:
+			str.append(radioData.radioName);
+		break;
+		case TAG_CLIENTS:
+			str.append(std::to_string(radioData.tunedClients));
+		break;
+		case TAG_SENDERNAME:
+			if (radioData.isRecieving && radioData.sentBy.size()) parseSenderName(radioData.sentBy[0], radioSettings.removeAllSpacesInSenderName, radioSettings.regexString, radioSettings.removeSpecialCharactersInSenderName, radioSettings.senderNameLineBreakage);
+		break;
+		case TAG_FREQ:
+			str.append(FreqToStr(radioData.frequency));
+		break;
+		case TAG_FREQMHZ:
+		{
+			std::string mhz = FreqToStr(radioData.frequency);
+			size_t pointPos = mhz.find('.');
+			str.append(mhz.substr(0, pointPos));
+		}
+		break;
+		case TAG_FREQKHZ:
+		{
+			std::string khz = FreqToStr(radioData.frequency);
+			size_t pointPos = khz.find('.');
+			str.append(khz.substr(pointPos + 1));
+		}
+		break;
+		default:
+		{
+			if (vI.first < TAG_FREQINDEX) break;
+			std::string hzIndex = FreqToStr(radioData.frequency);
+			size_t pointPos = hzIndex.find('.');
+			int n = hzIndex.size() - (vI.first - TAG_FREQINDEX);
+			if (n == pointPos) n++;
+			str.append(hzIndex.substr(n, 1));
+		}
+		}//switch
+	}//for
+
+	if (radioSettings.regexError)
+	{
+		mConnectionManager->SetTitle(str, context, kESDSDKTarget_HardwareOnly);
+		mConnectionManager->SetTitle("REGEX\nERROR", context, kESDSDKTarget_SoftwareOnly);
+	}
+	else mConnectionManager->SetTitle(str, context, kESDSDKTarget_HardwareAndSoftware);
+ }
 
 SRSInterfacePlugin::SRSInterfacePlugin()
 {
@@ -187,98 +398,6 @@ void SRSInterfacePlugin::SetRadioToContext(const std::string& context, const std
 	mConnectionManager->SetImage(*bgImage, context, kESDSDKTarget_HardwareAndSoftware);
 }
 
-void GetRadioRecieveData(const json& jsonData, std::multimap<int, std::string>& radiosRecv)
-{
-	if (jsonData.contains("RadioReceivingState") && jsonData["RadioReceivingState"].is_array())
-	{
-		try
-		{
-			json recvData = jsonData["RadioReceivingState"];
-			for (auto it : recvData)
-			{
-				if (!it.contains("IsReceiving") || !it.contains("ReceivedOn")) continue;
-
-				bool isRecv = it["IsReceiving"];
-				if (!isRecv) continue;
-				int onRadio = it["ReceivedOn"];
-				std::string senderName = (it.contains("SentBy") ? it["SentBy"] : "");
-
-				radiosRecv.insert(std::make_pair(onRadio, senderName));
-			}
-		}
-		catch (const json::type_error & e)
-		{
-			DebugPrint("JSON Error in GetRadioReceieveData: %s\n", e.what());
-			radiosRecv.clear();
-		}
-	}
-}
-
-int GetNumberOfClients(const json& jsonTunedClients, int currentRadio)
-{
-	try
-	{
-		if (currentRadio > jsonTunedClients.size()) return 0;
-
-		int rTunedClients = jsonTunedClients[currentRadio];
-		return rTunedClients;
-	}
-	catch (json::type_error& e)
-	{
-		DebugPrint("JSON Error in GetNumberOfClients: %s\n", e.what());
-		return 0;
-	}
-}
-
-
-std::string parseSenderName(std::string str, bool removeAllSpaces, const std::string& regexString, bool removeSpecialCharacters, unsigned int lineBreakage)
-{
-	// Remove all space characters
-	if(removeAllSpaces) str.erase(std::remove_if(str.begin(), str.end(), ::isspace), str.end());
-	
-	if (!regexString.empty())
-	{
-		// Removes all data between[], () and <> including the correspondingly brackets.
-		//std::regex regexExpression("\\[.*?\\]|\\(.*?\\)|\\<.*?\\>|\\{.*?\\}|\\|.*?\\|");
-		std::regex regexExpression(regexString);
-		str = std::regex_replace(str, regexExpression, "");
-	}//if
-
-	// Remove all characters that is not a..z/A..Z/1..9
-	if(removeSpecialCharacters)
-	{
-		str.erase(std::remove_if(str.begin(), str.end(), [](const char& element)
-		{
-			if (std::isalnum(element) || std::isspace(element)) return false;
-			return true;
-		}), str.end());
-	}
-
-	// Insert a line breakage every 5:th character
-	if(lineBreakage>0)
-	{
-		for (auto it = str.begin(); (lineBreakage + 1) <= std::distance(it, str.end()); ++it)
-		{
-			std::advance(it, lineBreakage);
-			it = str.insert(it, '\n');
-		}
-	}
-
-	return str;
-}
-
-
-std::string parseSRSRadioData(const SRSRadioData& radioData, bool showTunedClients)
-{
-	if (showTunedClients)
-	{
-		return radioData.radioName + "\n[ " + std::to_string(radioData.tunedClients) + " ]";
-	}
-
-	return radioData.radioName + "\n" + ToContextFreqFormat(radioData.frequency);
-}
-
-
 
 void SRSInterfacePlugin::UpdateSRSData(const SRSData* srsData)
 {
@@ -286,61 +405,11 @@ void SRSInterfacePlugin::UpdateSRSData(const SRSData* srsData)
 
 	for (auto itemContext : mVisibleContexts)
 	{
-		if (itemContext.second.isFrequencySetter) continue;
+		//if (itemContext.second.isFrequencySetter) continue;
 		int currentRadio = itemContext.second.showSelectedRadio ? srsData->selectedRadio : itemContext.second.radioSlot;
-
-		if (currentRadio >= srsData->radioList.size())
-		{
-			SetRadioToContext("-----", "---./n---", false, false, false, itemContext.second.regexError);
-		}
-		else
-		{
-			std::string str;
-			const SRSRadioData& srsRadio = srsData->radioList[currentRadio];
-			SRSActionSettings& as = itemContext.second;
-
-			if (srsRadio.isRecieving)
-			{
-				str = parseSenderName(srsRadio.sentBy[0], as.removeAllSpacesInSenderName, as.regexString, as.removeSpecialCharactersInSenderName, as.senderNameLineBreakage);
-				mVisibleContexts[itemContext.first].latestSenderOnRadio = str;
-
-				if (as.radioAppearance == SRSActionSettings::SHOW_ONLY_RADIO_NAME_AND_FREQUENCY)
-				{
-					str = parseSRSRadioData(srsRadio, as.showNumberOfClients);
-				}
-				else if (srsRadio.sentBy.size() > 1)
-				{
-					str = std::to_string(srsRadio.sentBy.size()) + "x\n#####\n#####";
-					//str = "#####\n#####\n#####";
-				}
-			}
-			else
-			{
-				if (as.radioAppearance == SRSActionSettings::SHOW_ONLY_SENDER_NAME)
-				{
-					str = "";
-				}
-				else if (as.radioAppearance == SRSActionSettings::SHOW_ONLY_SENDER_NAME_AND_KEEP)
-				{
-					str = as.latestSenderOnRadio;
-				}
-				else
-				{
-					str = parseSRSRadioData(srsRadio, as.showNumberOfClients);
-				}
-			}
-			
-			SetRadioToContext(	itemContext.first, 
-								str, 
-								srsData->sendingRadio  == currentRadio && !as.showOnlyBlackBackground,
-								srsRadio.isRecieving && !as.showOnlyBlackBackground,
-								currentRadio == srsData->selectedRadio && !as.showOnlyBlackBackground,
-								as.regexError);
-			//UpdateContext(itemContext, currentRadio, srsData->sendingRadio == currentRadio, srsData->selectedRadio, jsonRadios, radiosReceiving, GetNumberOfClients(jsonTunedClients, currentRadio));
-		}
+		DrawContext(itemContext.first, currentRadio, srsData, itemContext.second);
 	}
 }
-
 
 
 
@@ -379,37 +448,40 @@ void SRSInterfacePlugin::SendToPlugin(const std::string& inAction, const std::st
 {
 	std::lock_guard<std::mutex> lock(mVisibleContextsMutex);
 
-	if (inAction.compare("com.vantdev.srsinterface.setfreq") == 0)
+	if (inPayload.contains(RADIO_CHANGE_FREQUENCY))
 	{
-		// Set setfreq settings
-		
-		if (inPayload.contains(RADIO_SLOT))
-		{
-			mVisibleContexts[inContext].radioSlot = GetJSON_Integer(inPayload, RADIO_SLOT, 1);
-		}
-		else if (inPayload.contains(SHOW_SELECTED_RADIO))
-		{
-			mVisibleContexts[inContext].showSelectedRadio = GetJSON_Bool(inPayload, SHOW_SELECTED_RADIO, true);
-		}
-		else if(inPayload.contains(RADIO_INCREMENTION))
-		{
-			try
-			{
-				std::string radioIncremention = GetJSON_String(inPayload, RADIO_INCREMENTION, "0.025");
-				mVisibleContexts[inContext].radioIncremention = std::stod(radioIncremention);
-			}
-			catch (std::invalid_argument& e)
-			{
-				DebugPrint("Error in radio incremention value: %s\n", e.what());
-				mVisibleContexts[inContext].radioIncremention = 0.000;
-			}
-		}
-
-		return;
+		mVisibleContexts[inContext].isFrequencySetter = GetJSON_Bool(inPayload, RADIO_CHANGE_FREQUENCY, false);
 	}
-
-
-	if (inPayload.contains(RADIO_SLOT))
+	else if (inPayload.contains(RADIO_INCREMENTION))
+	{
+		try
+		{
+			std::string radioIncremention = GetJSON_String(inPayload, RADIO_INCREMENTION, "0.025");
+			mVisibleContexts[inContext].radioIncremention = std::stod(radioIncremention);
+		}
+		catch (std::invalid_argument& e)
+		{
+			DebugPrint("Error in radio incremention value: %s\n", e.what());
+			mVisibleContexts[inContext].radioIncremention = 0.000;
+		}
+	}
+	else if (inPayload.contains(RADIO_APPEARANCE_SETTINGS))
+	{
+		mVisibleContexts[inContext].vLayout.clear();
+		std::string radioAppearanceSettings = GetJSON_String(inPayload, RADIO_APPEARANCE_SETTINGS, "");
+		bool bOK = ConstructLayout(radioAppearanceSettings, mVisibleContexts[inContext].vLayout);
+		if (!bOK) mVisibleContexts[inContext].regexError = true;
+		else mVisibleContexts[inContext].regexError = false;
+	}
+	else if (inPayload.contains(RADIO_APPEARANCE_ON_TRANSMISSION_SETTINGS))
+	{
+		mVisibleContexts[inContext].vLayoutTransmission.clear();
+		std::string radioAppearanceOnTransmissionSettings = GetJSON_String(inPayload, RADIO_APPEARANCE_ON_TRANSMISSION_SETTINGS, "");
+		bool bOK = ConstructLayout(radioAppearanceOnTransmissionSettings, mVisibleContexts[inContext].vLayoutTransmission);
+		if (!bOK) mVisibleContexts[inContext].regexError = true;
+		else mVisibleContexts[inContext].regexError = false;
+	}
+	else if (inPayload.contains(RADIO_SLOT))
 	{
 		mVisibleContexts[inContext].radioSlot = GetJSON_Integer(inPayload, RADIO_SLOT, 1);
 	}
@@ -417,17 +489,9 @@ void SRSInterfacePlugin::SendToPlugin(const std::string& inAction, const std::st
 	{
 		mVisibleContexts[inContext].showSelectedRadio = GetJSON_Bool(inPayload, SHOW_SELECTED_RADIO, false);
 	}
-	else if (inPayload.contains(RADIO_APPEARANCE))
-	{
-		mVisibleContexts[inContext].radioAppearance = GetJSON_Integer(inPayload, RADIO_APPEARANCE, 0);
-	}
 	else if (inPayload.contains(SHOW_ONLY_BLACK_BACKGROUND))
 	{
 		mVisibleContexts[inContext].showOnlyBlackBackground = GetJSON_Bool(inPayload, SHOW_ONLY_BLACK_BACKGROUND, false);
-	}
-	else if (inPayload.contains(SHOW_NUMBER_OF_CLIENTS))
-	{
-		mVisibleContexts[inContext].showNumberOfClients = GetJSON_Bool(inPayload, SHOW_NUMBER_OF_CLIENTS, false);
 	}
 	else if (inPayload.contains(SENDER_NAME_REGEX))
 	{
@@ -464,48 +528,44 @@ void SRSInterfacePlugin::SendToPlugin(const std::string& inAction, const std::st
 void SRSInterfacePlugin::WillAppearForAction(const std::string& inAction, const std::string& inContext, const json &inPayload, const std::string& inDeviceID)
 {
 	// Remember the context
-	std::lock_guard<std::mutex> lock(mVisibleContextsMutex);
+	std::scoped_lock lock(mVisibleContextsMutex);
 	if (mVisibleContexts.size() == 0)
 	{
+		srs_server->cancel_stop_server();
 		srs_server->start_server();
 	}
 
 	SRSActionSettings srsActionSettings;
 	json payloadSettings = inPayload["settings"];
+		
 
-	if (inAction.compare("com.vantdev.srsinterface.setfreq") == 0)
+	srsActionSettings.isFrequencySetter = GetJSON_Bool(payloadSettings, RADIO_CHANGE_FREQUENCY, false);
+	try
 	{
-		mConnectionManager->SetTitle("", inContext, kESDSDKTarget_HardwareAndSoftware);
-		mConnectionManager->SetImage(blackImage, inContext, kESDSDKTarget_HardwareAndSoftware);
-		// Load settings for setfreq action button
-		srsActionSettings.isFrequencySetter = true;
-		
-		srsActionSettings.radioSlot = GetJSON_Integer(payloadSettings, RADIO_SLOT, 1);
-		srsActionSettings.showSelectedRadio = GetJSON_Bool(payloadSettings, SHOW_SELECTED_RADIO, true);
-		
-		try
-		{
-			std::string radioIncremention = GetJSON_String(payloadSettings, RADIO_INCREMENTION, "0.025");
-			srsActionSettings.radioIncremention = std::stod(radioIncremention);
-		}
-		catch (std::invalid_argument& e)
-		{
-			DebugPrint("Error in radio incremention value: %s\n", e.what());
-			srsActionSettings.radioIncremention = 0.000;
-		}
-
-		mVisibleContexts.insert(std::make_pair(inContext, srsActionSettings));
-		radioChange = true;
-
-		return;
+		std::string radioIncremention = GetJSON_String(payloadSettings, RADIO_INCREMENTION, "0.025");
+		srsActionSettings.radioIncremention = std::stod(radioIncremention);
 	}
+	catch (std::invalid_argument& e)
+	{
+		DebugPrint("Error in radio incremention value: %s\n", e.what());
+		srsActionSettings.radioIncremention = 0.000;
+	}
+	
+	std::string radioAppearanceSettings = GetJSON_String(payloadSettings, RADIO_APPEARANCE_SETTINGS, "");
+	srsActionSettings.vLayout.clear();
+	bool bOK = ConstructLayout(radioAppearanceSettings, srsActionSettings.vLayout);
+	if (!bOK) srsActionSettings.regexError = true;
+	else srsActionSettings.regexError = false;
 
+	std::string radioAppearanceOnTransmissionSettings = GetJSON_String(payloadSettings, RADIO_APPEARANCE_ON_TRANSMISSION_SETTINGS, "");
+	srsActionSettings.vLayoutTransmission.clear();
+	bOK = ConstructLayout(radioAppearanceOnTransmissionSettings, srsActionSettings.vLayoutTransmission);
+	if (!bOK) srsActionSettings.regexError = true;
+	else srsActionSettings.regexError = false;
 
 	srsActionSettings.radioSlot = GetJSON_Integer(payloadSettings, RADIO_SLOT, 1);
 	srsActionSettings.showSelectedRadio = GetJSON_Bool(payloadSettings, SHOW_SELECTED_RADIO, false);
-	srsActionSettings.radioAppearance = GetJSON_Integer(payloadSettings, RADIO_APPEARANCE, 0);
 	srsActionSettings.showOnlyBlackBackground = GetJSON_Bool(payloadSettings, SHOW_ONLY_BLACK_BACKGROUND, false);
-	srsActionSettings.showNumberOfClients = GetJSON_Bool(payloadSettings, SHOW_NUMBER_OF_CLIENTS, false);
 	srsActionSettings.removeAllSpacesInSenderName = GetJSON_Bool(payloadSettings, SENDER_NAME_REMOVE_SPACES, false);
 	srsActionSettings.removeSpecialCharactersInSenderName = GetJSON_Bool(payloadSettings, SENDER_NAME_REMOVE_SPECIAL_CHARACTERS, false);
 	srsActionSettings.senderNameLineBreakage = GetJSON_Integer(payloadSettings, SENDER_NAME_LINE_BREAKAGE, 5);
@@ -531,14 +591,16 @@ void SRSInterfacePlugin::WillAppearForAction(const std::string& inAction, const 
 	radioChange = true;
 }
 
+
 void SRSInterfacePlugin::WillDisappearForAction(const std::string& inAction, const std::string& inContext, const json &inPayload, const std::string& inDeviceID)
 {
 	// Remove the context
 	std::lock_guard<std::mutex> lock(mVisibleContextsMutex);
 	mVisibleContexts.erase(inContext);
+	
 	if (mVisibleContexts.size() == 0)
 	{
-		//srs_server->stop_server();
+		srs_server->stop_server_after(serverStopDelayTime);
 	}
 }
 

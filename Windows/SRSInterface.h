@@ -31,25 +31,35 @@ private:
 	sockaddr_in serverInHint;
 	UINT_PTR clientOutSocket;
 	UINT_PTR serverInSocket;
+	int wsaCode;
 
-	bool isServerThreadUpdating = false;
+	volatile bool isServerThreadUpdating = false;
 
 	std::mutex mSRSData;
 	SRSData* srsData = nullptr;
-	void server_thread();
-	std::thread tServer; // Running the server_thread()
-	class SRSInterfacePlugin* srsInterfacePlugin = nullptr;	//Access to callback method UpdateData(const json& jsonData) in SRSInterfacePlugin
+	bool construct_safe_data(const json& jsonData, SRSData* data);
 
 	std::mutex mServer;
+	void server_thread();
+	std::thread tServer; // Running the server_thread()
 
+	std::thread tStopServerDelay;
+	std::condition_variable cvStopServerDelay;
 	bool open_sockets();
 	void close_sockets();
+	void stop_server_delay(int seconds);
+	void stop_server();
+
+	class SRSInterfacePlugin* srsInterfacePlugin = nullptr;	//Access to callback method UpdateData(const json& jsonData) in SRSInterfacePlugin
 
 public:
 	//static const std::string TUNED_CLIENTS;
-	bool construct_safe_data(const json& jsonData, SRSData* data);
-	void start_server();
-	void stop_server();
+	
+
+	bool start_server();
+	void stop_server_after(int seconds);
+	void cancel_stop_server();
+
 	void SelectRadio(int radio); // Set selected radio in SRS
 	void ChangeRadioFrequency(int radio, double frequency); // Set selected radio in SRS
 	bool GetRadioFrequency(int radio, double& frequency);

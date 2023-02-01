@@ -11,7 +11,7 @@
 	<div class="sdpi-wrapper">
 		<div type="checkbox" class="sdpi-item">
 			<input class="sdpi-item-value" id="showSelectedRadio" type="checkbox" onclick="sendValueToPlugin(event.target.checked, 'selectedRadio')">
-			<label for="showSelectedRadio"><span></span>Show only data for the currently selected radio.</label>
+			<label for="showSelectedRadio"><span></span>Show and change only data for the currently selected radio.</label>
 		</div>
 
 		<div class="sdpi-heading">Radio channel</div>
@@ -26,34 +26,91 @@
 			</div>
 		</div>
 		<hr>
-		
-		<div class="sdpi-heading">Radio appearance</div>
-		<div type="radio" class="sdpi-item" id="radioAppearanceOptions">
-			<div class="sdpi-item-value ">
-				<span class="sdpi-item-child">
-					<input id="onlyRadioNameAndFrequency" type="radio" name="rdio" checked onclick="sendValueToPlugin(0, 'radioAppearanceOptions')">
-					<label for="onlyRadioNameAndFrequency" class="sdpi-item-label"><span></span>Only radio name and frequency</label>
-				</span>
-				<br>
-				<span class="sdpi-item-child">
-					<input id="senderNameOnTop" type="radio" name="rdio" onclick="sendValueToPlugin(1, 'radioAppearanceOptions')">
-					<label for="senderNameOnTop" class="sdpi-item-label"><span></span>As above, but show sender name on transmission</label>
-				</span>
-				<br>
-				<span class="sdpi-item-child">
-					<input id="showOnlySenderName" type="radio" name="rdio" onclick="sendValueToPlugin(2, 'radioAppearanceOptions')">
-					<label for="showOnlySenderName" class="sdpi-item-label"><span></span>Only sender name</label>
-				</span>
-				<span class="sdpi-item-child">
-					<input id="showOnlySenderNameAndKeep" type="radio" name="rdio" onclick="sendValueToPlugin(3, 'radioAppearanceOptions')">
-					<label for="showOnlySenderNameAndKeep" class="sdpi-item-label"><span></span>As above, but always keep latest sender name visible</label>
-				</span>
+
+		<div type="checkbox" class="sdpi-item">
+			<input class="sdpi-item-value" id="frequencyChange" type="checkbox" onclick="sendValueToPlugin(event.target.checked, 'frequencyChange')">
+			<label for="frequencyChange"><span></span>Change frequency when pressing the button</label>
+		</div>
+		<div class="sdpi-heading">Frequency change</div>
+		<div type="group" class="sdpi-item" id="frequencyChangeGroup">
+			<i>
+				To increase the frequency, set a value of i.e. 0.025<br>
+				To decrease, assign a negative value.<br />
+				I.e. to decrease a current frequency of 162.500 to 162.250, set the field to:<br />
+				-0.25<br />
+			</i>
+			<div class="sdpi-item">
+				<input class="sdpi-item-value" id="radioIncremention" value="0.025">
+			</div>
+			<br>
+			<div class="sdpi-item">
+				<button class="sdpi-item-value" onclick="sendValueToPlugin(document.getElementById('radioIncremention').value, 'radioIncremention')">Set frequency incremention</button>
 			</div>
 		</div>
-		<div type="checkbox" class="sdpi-item">
-			<input class="sdpi-item-value" id="showNumberOfClients" type="checkbox" onclick="sendValueToPlugin(event.target.checked, 'showNumberOfClients')">
-			<label for="showNumberOfClients"><span></span>Show number of clients in channel instead of the freqenecy</label>
+		<hr>
+
+		<div class="sdpi-heading">Radio appearance</div>
+		<details class="sdpi-item-value">
+			<summary>How to ...</summary>
+			Customize how your button should appear. Everything inside the brackets <b style="color:white">[  ]</b> should
+			contain a valid tag which is described below.
+			Everything else is treated as static text.
+			If you want to show brackets <b style="color:white">[  ]</b> in the button, prepend them with a <b style="color:white">\</b> i.e:<br />
+			<b style="color:white">\[</b>  Static text including brackets  <b style="color:white">\]</b><br />
+			A new line is treated as a new line in the button.<br />
+			List of tags:<br />
+			<b style="color:white">[RadioName]</b> This shows the name of the radio<br />
+			<b style="color:white">[Clients]</b> This shows the number of clients<br />
+			<b style="color:white">[SenderName]</b> On radio transmission, this shows the sender name.<br />
+			<b style="color:white">[Freq]</b> Shows the radio frequency nnn.nnn in Mhz<br />
+			<b style="color:white">[FreqMhz]</b> As above, but does not show the decimals<br />
+			<b style="color:white">[FreqKhz]</b> Only show the decimals<br />
+			<b style="color:white">[FreqIndexN]</b> Show only one number at index N of the frequency, where index starting from 3rd decimal to left (see example below)<br />
+			<br />
+			<b style="color:white">Example 1:</b><br />
+			[RadioName]<br />
+			[FreqMhz].<br />
+			[FreqKhz]<br />
+			<b style="color:white">Output:</b><br />
+			RADIO 1<br />
+			144.<br />
+			440<br />
+			<br />
+			<b style="color:white">Example 2 (frequency is 144.440):</b><br />
+			[RadioName]<br />
+			[FreqIndex5][FreqIndex4].[FreqIndex3][FreqIndex2][FreqIndex1]<br />
+			<b style="color:white">Output:</b><br />
+			RADIO 2<br />
+			44.440<br />
+			<br />
+			<b style="color:white">Example 3:</b><br />
+			[RadioName]<br />
+			/[ [Clients] /]<br />
+			<b style="color:white">Output:</b><br />
+			RADIO 3<br />
+			[ 9 ]<br />
+		</details>
+		Default:
+		<div type="textarea" class="sdpi-item">
+			<span class="sdpi-item-value textarea">
+				<textarea type="textarea" id="radioAppearanceSettings"></textarea>
+			</span>
 		</div>
+		<div class="sdpi-item">
+			<button class="sdpi-item-value" onclick="sendValueToPlugin(document.getElementById('radioAppearanceSettings').value, 'radioAppearanceSettings')">Set radio appearance</button>
+		</div>
+		On transmission (if empty, it uses the default above):
+		<div type="textarea" class="sdpi-item">
+			<span class="sdpi-item-value textarea">
+				<textarea type="textarea" id="radioAppearanceOnTransmissionSettings"></textarea>
+			</span>
+		</div>
+		<div class="sdpi-item">
+			<button class="sdpi-item-value" onclick="sendValueToPlugin(document.getElementById('radioAppearanceOnTransmissionSettings').value, 'radioAppearanceOnTransmissionSettings')">Set radio appearance on transmission</button>
+		</div>
+		<hr/>
+
+		<div class="sdpi-heading">Radio appearance</div>
 		<div type="checkbox" class="sdpi-item">
 			<input class="sdpi-item-value" id="showOnlyBlackBackground" type="checkbox" onclick="sendValueToPlugin(event.target.checked, 'showOnlyBlackBackground')">
 			<label for="showOnlyBlackBackground"><span></span>Show only black background color</label>
@@ -75,30 +132,30 @@
 		Remove characters within brackets [], <> and ():
 		<br>
 		\[.*?\]|\(.*?\)|\<.*?\>
-		<br><br>
-		Leave empty if you do not want to parse the sender name.
-		<br>
-		<div class="sdpi-item">
-			<input class="sdpi-item-value" id="senderNameRegex" placeholder="Regex value" value="">
-		</div>
-		<br>
-		<div class="sdpi-item">
-			<button class="sdpi-item-value" onclick="sendValueToPlugin(document.getElementById('senderNameRegex').value, 'senderNameRegex')">Set regex expression</button>
-		</div>
-		Set the maximum number of letters per line shown from the senders alias name.
-		<br>
-		I.e. if the name has 15 letters, and a value of 5 is set, the name will be divided in three lines of 5 letters each.
-		<div class="sdpi-item">
-			<input type="number" class="sdpi-item-value" id="senderNameLineBreakage" placeholder = "Set to 0 to disable line breakage" value="5">
-		</div>
-		<div class="sdpi-item">
-			<button class="sdpi-item-value" onclick="sendValueToPlugin(parseInt(document.getElementById('senderNameLineBreakage').value), 'senderNameLineBreakage')">
-			Set maximum letters per line
-			</button>
-		</div>
-		<hr>
-				
-		<!-- END OF SDPI-WRAPPER -->
+			<br><br>
+			Leave empty if you do not want to parse the sender name.
+			<br>
+			<div class="sdpi-item">
+				<input class="sdpi-item-value" id="senderNameRegex" placeholder="Regex value" value="">
+			</div>
+			<br>
+			<div class="sdpi-item">
+				<button class="sdpi-item-value" onclick="sendValueToPlugin(document.getElementById('senderNameRegex').value, 'senderNameRegex')">Set regex expression</button>
+			</div>
+			Set the maximum number of letters per line shown from the senders alias name.
+			<br>
+			I.e. if the name has 15 letters, and a value of 5 is set, the name will be divided in three lines of 5 letters each.
+			<div class="sdpi-item">
+				<input type="number" class="sdpi-item-value" id="senderNameLineBreakage" placeholder="Set to 0 to disable line breakage" value="5">
+			</div>
+			<div class="sdpi-item">
+				<button class="sdpi-item-value" onclick="sendValueToPlugin(parseInt(document.getElementById('senderNameLineBreakage').value), 'senderNameLineBreakage')">
+					Set maximum letters per line
+				</button>
+			</div>
+			<hr>
+
+			<!-- END OF SDPI-WRAPPER -->
 	</div>
 	
 	<script src="radiodata.js"></script>

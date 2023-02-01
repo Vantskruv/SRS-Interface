@@ -38,6 +38,8 @@ public:
 
 	void UpdateSRSData(const class SRSData* srsData);
 
+	const int serverStopDelayTime = 60;
+
 private:
 	
 	std::mutex mVisibleContextsMutex;
@@ -47,6 +49,6 @@ private:
 	bool radioChange = false; // Update radios if there is a settings change
 
 	void SetRadioToContext(const std::string& context, const std::string& str, bool isSending, bool isRecieving, bool isSelected, bool regexError);
-	void UpdateContext(std::pair<const std::string, class SRSActionSettings>& itemContext, int currentRadio, bool isSending, int selectedRadio, const json& jsonRadios, const std::multimap<int, std::string>& radiosReceiving, int numberOfClients);
+	void DrawContext(const std::string& context, unsigned int radio, const class SRSData* srsData, const class SRSActionSettings& as);
 
 };

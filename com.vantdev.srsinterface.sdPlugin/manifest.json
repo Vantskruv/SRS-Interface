@@ -14,23 +14,7 @@
       "Tooltip": "Display and change active radio from DCS SimpleRadio.",
       "UUID": "com.vantdev.srsinterface.radiodata",
       "PropertyInspectorPath": "propertyinspector/radiodata.html"
-    },
-    {
-      "Icon": "srs_icon",
-      "Name": "SRS Set Frequency",
-      "States": [
-        {
-          "Image": "BLACK",
-          "TitleAlignment": "middle",
-          "FontSize": "15"
-        }
-      ],
-      "SupportedInMultiActions": false,
-      "Tooltip": "Increase or decrease radio frequency in DCS SimpleRadio.",
-      "UUID": "com.vantdev.srsinterface.setfreq",
-      "PropertyInspectorPath": "propertyinspector/setfreq.html"
     }
-
   ], 
   "SDKVersion": 2,
   "Category": "SRS Interface",

@@ -48,15 +48,18 @@ function loadConfiguration(payload)
 	let showSelectedRadio = document.getElementById("showSelectedRadio");
 	showSelectedRadio.checked = getProperty(payload, "selectedRadio", false);
 
+	let frequencyChange = document.getElementById("frequencyChange");
+	frequencyChange.checked = getProperty(payload, "frequencyChange", false);
+
 	let radioSlot = document.getElementById("radioSlot");
 	radioSlot.value = getProperty(payload, "radioSlot", 1);
-		
-	let radioButtons = document.getElementsByName("rdio");
-	let radioAppearanceSelected = getProperty(payload, "radioAppearanceOptions", 0);
-	radioButtons[radioAppearanceSelected].checked = true;
 
-	let showNumberOfClients = document.getElementById("showNumberOfClients");
-	showNumberOfClients.checked = getProperty(payload, "showNumberOfClients", false);
+	let radioAppearanceSettings = document.getElementById("radioAppearanceSettings");
+	radioAppearanceSettings.value = getProperty(payload, "radioAppearanceSettings", "");
+
+	let radioAppearanceOnTransmissionSettings = document.getElementById("radioAppearanceOnTransmissionSettings");
+	radioAppearanceOnTransmissionSettings.value = getProperty(payload, "radioAppearanceOnTransmissionSettings", "");
+
 
 	let showOnlyBlackBackground = document.getElementById("showOnlyBlackBackground");
 	showOnlyBlackBackground.checked = getProperty(payload, "showOnlyBlackBackground", false)
@@ -83,6 +86,15 @@ function loadConfiguration(payload)
 		let defaultOptionsGroup = document.getElementById("defaultOptionsGroup");
 		defaultOptionsGroup.style.display = "block";
 	}
+
+	if (frequencyChange.checked) {
+		let frequencyChangeGroup = document.getElementById("frequencyChangeGroup");
+		frequencyChangeGroup.style.display = "block";
+	}
+	else {
+		let frequencyChangeGroup = document.getElementById("frequencyChangeGroup");
+		frequencyChangeGroup.style.display = "none";
+	}
 }
 
 
@@ -99,6 +111,17 @@ function sendValueToPlugin(value, param)
 		else {
 			let defaultOptionsGroup = document.getElementById("defaultOptionsGroup");
 			defaultOptionsGroup.style.display = "block";
+		}
+	}
+
+	if (param == "frequencyChange") {
+		if (value) {
+			let frequencyChangeGroup = document.getElementById("frequencyChangeGroup");
+			frequencyChangeGroup.style.display = "block";
+		}
+		else {
+			let frequencyChangeGroup = document.getElementById("frequencyChangeGroup");
+			frequencyChangeGroup.style.display = "none";
 		}
 	}
 

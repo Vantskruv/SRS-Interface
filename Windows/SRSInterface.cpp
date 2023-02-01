@@ -23,13 +23,13 @@ SRSInterface::SRSInterface(SRSInterfacePlugin* pluginCallback)
 	inet_pton(AF_INET, "127.0.0.1", &clientOutHint.sin_addr);
 
 	// Create a hint structure for the server
+	serverInHint = {};
 	serverInHint.sin_addr.S_un.S_addr = ADDR_ANY;
 	serverInHint.sin_family = AF_INET;
 	serverInHint.sin_port = htons(SRSInterface::UDP_RECEIVE_PORT); // Convert from little to big endian
 	serverInSocket = INVALID_SOCKET;
 	clientOutSocket = INVALID_SOCKET;
-
-	open_sockets();
+	wsaCode = WSA_INVALID_HANDLE;
 }
 
 
@@ -37,28 +37,44 @@ SRSInterface::SRSInterface(SRSInterfacePlugin* pluginCallback)
 SRSInterface::~SRSInterface()
 {
 	stop_server();
-	close_sockets();
 	delete srsData;
 }
 
 bool SRSInterface::open_sockets()
 {
-	std::lock_guard<std::mutex> lock(mServer);
-	WSADATA data;
-	WORD version = MAKEWORD(2, 2);
-	int wsOK = WSAStartup(version, &data);
-
-	if (wsOK != 0)
+	if(wsaCode!=0)
 	{
-		DebugPrint("ERROR: WSA startup failed in initialize_server(): %d", wsOK);
-		return false;
+		WSADATA data;
+		WORD version = MAKEWORD(2, 2);
+		wsaCode = WSAStartup(version, &data);
+
+		if (wsaCode != 0)
+		{
+			DebugPrint("ERROR: WSA startup failed in initialize_server(): %d", wsaCode);
+			return false;
+		}
 	}
 
-	serverInSocket = socket(AF_INET, SOCK_DGRAM, 0);
+	//serverInSocket = socket(AF_INET, SOCK_DGRAM, 0);
+	serverInSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+	//DWORD nonBlocking = 1;
+	//ioctlsocket(serverInSocket, FIONBIO, &nonBlocking);
+	
+	BOOL bOptVal = TRUE;
+	int bOptLen = sizeof(BOOL);
+	if (setsockopt(serverInSocket, SOL_SOCKET, SO_REUSEADDR, (char*)&bOptVal, bOptLen) == SOCKET_ERROR)
+	{
+		int wsaError = WSAGetLastError();
+		DebugPrint("setsockopt error: %d\n", wsaError);
+		WSACleanup();
+		return false;
+	}
 	
 	if (serverInSocket == INVALID_SOCKET)
 	{
 		DebugPrint("ERROR: Server socket failed in initialize_sockets(): %d", WSAGetLastError());
+		wsaCode = WSA_INVALID_HANDLE;
 		WSACleanup();
 		return false;
 	}
@@ -68,6 +84,7 @@ bool SRSInterface::open_sockets()
 		DebugPrint("ERROR: Server bind failed in initialize_sockets(): %d", WSAGetLastError());
 		closesocket(serverInSocket);
 		serverInSocket = INVALID_SOCKET;
+		wsaCode = WSA_INVALID_HANDLE;
 		WSACleanup();
 		return false;
 	}
@@ -76,6 +93,7 @@ bool SRSInterface::open_sockets()
 	if (clientOutSocket == INVALID_SOCKET)
 	{
 		DebugPrint("ERROR: Client socket failed in initialize_sockets(): %d", WSAGetLastError());
+		wsaCode = WSA_INVALID_HANDLE;
 		WSACleanup();
 		return false;
 	}
@@ -85,12 +103,13 @@ bool SRSInterface::open_sockets()
 
 void SRSInterface::close_sockets()
 {
-	std::lock_guard<std::mutex> lock(mServer);
+	DebugPrint("CLOSING SOCKETS\n");
 	closesocket(clientOutSocket);
 	clientOutSocket = INVALID_SOCKET;
 	closesocket(serverInSocket);
 	serverInSocket = INVALID_SOCKET;
-	WSACleanup();
+	if(wsaCode == 0) WSACleanup();
+	wsaCode = WSA_INVALID_HANDLE;
 }
 
 
@@ -114,9 +133,7 @@ void SRSInterface::ChangeRadioFrequency(int radio, double frequency)
 	std::ostringstream oss;
 	oss << std::fixed << std::setprecision(3) << "{Command: 0, RadioId: " << radio << ", Frequency: " << frequency << " }\n";
 	std::string s = oss.str();
-	DebugPrint("%f\n%s\n", frequency, s.c_str());
 	int sendOK = sendto(clientOutSocket, s.c_str(), s.size() + 1, 0, (sockaddr*)&clientOutHint, sizeof(clientOutHint));
-	DebugPrint("SendOK: %d\n", sendOK);
 }
 
 bool SRSInterface::GetRadioFrequency(int radio, double& frequency)
@@ -134,26 +151,64 @@ int SRSInterface::GetSelectedRadio()
 	return srsData->selectedRadio;
 }
 
-void SRSInterface::start_server()
+
+/** 
+ * Returns true if either server is already running, or if it successfully starrted up. 
+ */
+bool SRSInterface::start_server()
 {
 	std::lock_guard<std::mutex> lock(mServer);
-	if (isServerThreadUpdating) return;
+	if (isServerThreadUpdating) return true;
 
+	if (tServer.joinable())
+	{
+		close_sockets();
+		tServer.join();
+	}
+
+	DebugPrint("START_SERVER: STARTING SERVER\n");
+	if (!open_sockets()) return false;
 	tServer = std::thread(&SRSInterface::server_thread, this);
 	while (!isServerThreadUpdating) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+	DebugPrint("START_SERVER: SERVER IS NOW STARTED\n");
+	return true;
 }
 
 void SRSInterface::stop_server()
 {
-	std::lock_guard<std::mutex> lock(mServer);
+	//std::lock_guard<std::mutex> lock(mServer);
+	DebugPrint("STOP_SERVER: STOPPING THE SERVER\n");
 	isServerThreadUpdating = false;
+	close_sockets();
 	if(tServer.joinable()) tServer.join();
+	DebugPrint("STOP_SERVER: SERVER IS STOPPED\n");
+}
+
+
+void SRSInterface::cancel_stop_server()
+{
+	cvStopServerDelay.notify_all();
+	if (tStopServerDelay.joinable()) tStopServerDelay.join();
+}
+
+void SRSInterface::stop_server_after(int seconds)
+{
+	if(!tStopServerDelay.joinable()) tStopServerDelay = std::thread(&SRSInterface::stop_server_delay, this, seconds);
+}
+
+void SRSInterface::stop_server_delay(int seconds)
+{
+	std::unique_lock<std::mutex> lock(mServer);
+
+	if (cvStopServerDelay.wait_for(lock, std::chrono::seconds(seconds)) == std::cv_status::timeout)
+	{
+		stop_server();
+	}
 }
 
 void SRSInterface::server_thread()
 {
-	isServerThreadUpdating = true;
-
 	sockaddr_in client;
 	int clientSize = sizeof(client);
 
@@ -191,6 +246,7 @@ void SRSInterface::server_thread()
 	-----------------------------------------------------
 	*/
 	
+	isServerThreadUpdating = true;
 	while (isServerThreadUpdating)
 	{
 		ZeroMemory(&client, clientSize);
@@ -198,8 +254,8 @@ void SRSInterface::server_thread()
 		int bytesIn = recvfrom(serverInSocket, recieveBuffer, RECIEVE_BUFFER_SIZE, 0, (sockaddr*)&client, &clientSize);
 		if (bytesIn == SOCKET_ERROR)
 		{
-			//std::cout << "Error receiving from client " << WSAGetLastError() << std::endl;
-			Sleep(1000);
+			DebugPrint("SOCKET_ERROR: %d\n", WSAGetLastError());
+			std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 			continue;
 		}
 
@@ -221,6 +277,7 @@ void SRSInterface::server_thread()
 	}
 
 	delete [] recieveBuffer;
+	isServerThreadUpdating = false;
 }
 
 /*
