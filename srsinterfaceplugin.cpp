@@ -44,15 +44,21 @@ static const std::string RADIO_INCREMENTION = "radioIncremention";
 static const std::string RADIO_APPEARANCE_SETTINGS = "radioAppearanceSettings";
 static const std::string RADIO_APPEARANCE_ON_TRANSMISSION_SETTINGS = "radioAppearanceOnTransmissionSettings";
 
-static const int TAG_INVALID = -1;
-static const int TAG_STRING = 0;
-static const int TAG_RADIONAME = 1;
-static const int TAG_CLIENTS = 2;
-static const int TAG_SENDERNAME = 3;
-static const int TAG_FREQ = 4;
-static const int TAG_FREQMHZ = 5;
-static const int TAG_FREQKHZ = 6;
-static const int TAG_FREQINDEX = 7;
+static const unsigned int TAG_INVALID =     0x00000000;
+static const unsigned int TAG_STRING =      0x10000000;
+static const unsigned int TAG_RADIONAME =   0x20000000;
+static const unsigned int TAG_CLIENTS =     0x30000000;
+static const unsigned int TAG_SENDERNAME =  0x40000000;
+static const unsigned int TAG_FREQ =        0x50000000;
+static const unsigned int TAG_FREQMHZ =     0x60000000;
+static const unsigned int TAG_FREQKHZ =     0x70000000;
+static const unsigned int TAG_FREQINDEX =   0x80000000;
+static const unsigned int TAG_GETKEY =      0xF0000000;
+static const unsigned int TAG_GETNUMBER =   0x0FFFFFFF;
+
+static const int ERROR_FLAG_REGEX = 0x100;
+static const int ERROR_FLAG_DEF_FIELD = 0x010;
+static const int ERROR_FLAG_TRANS_FIELD = 0x001;
 
 
 class SRSActionSettings
@@ -60,8 +66,8 @@ class SRSActionSettings
 public:
 	int radioSlot;
 	
-	std::vector<std::pair<int, std::string>> vLayout;
-	std::vector<std::pair<int, std::string>> vLayoutTransmission;
+	std::vector<std::pair<unsigned int, std::string>> vLayout;
+	std::vector<std::pair<unsigned int, std::string>> vLayoutTransmission;
 	
 	bool isFrequencySetter = false;
 	double radioIncremention = 0.025;
@@ -76,8 +82,9 @@ public:
 	bool removeSpecialCharactersInSenderName = false;
 	int senderNameLineBreakage = 5;
 
-	bool regexError = false;
+	int errorCode = 0;
 	std::string latestSenderOnRadio;
+	volatile unsigned int latestSenderTimer = 0;
 };
 
 
@@ -150,16 +157,30 @@ int ResolveTag(const std::string& strTag)
 	std::transform(str.begin(), str.end(), str.begin(), ::toupper);
 	if (strcmp(str.c_str(), "RADIONAME") == 0) return TAG_RADIONAME;
 	else if (strcmp(str.c_str(), "CLIENTS") == 0) return TAG_CLIENTS;
-	else if (strcmp(str.c_str(), "SENDERNAME") == 0) return TAG_SENDERNAME;
 	else if (strcmp(str.c_str(), "FREQ") == 0) return TAG_FREQ;
 	else if (strcmp(str.c_str(), "FREQMHZ") == 0) return TAG_FREQMHZ;
 	else if (strcmp(str.c_str(), "FREQKHZ") == 0) return TAG_FREQKHZ;
+	else if (strcmp(str.substr(0, 10).c_str(), "SENDERNAME") == 0)
+	{
+		if (strlen(str.c_str()) < 11) return TAG_SENDERNAME;
+		try
+		{
+			unsigned int senderNameTimer = std::stoul(strTag.substr(10)) | TAG_SENDERNAME;
+			if (TAG_SENDERNAME == (senderNameTimer & TAG_GETKEY)) return senderNameTimer;
+			else return TAG_INVALID;
+		}
+		catch (...)
+		{
+			return TAG_INVALID;
+		}
+	}
 	else if (strcmp(str.substr(0, 9).c_str(), "FREQINDEX") == 0)
 	{
 		try
 		{
-			unsigned int freqIndex = std::stoul(strTag.substr(9));
-			return TAG_FREQINDEX + freqIndex;
+			unsigned int freqIndex = std::stoul(str.substr(9)) | TAG_FREQINDEX;
+			if (TAG_FREQINDEX == (freqIndex & TAG_GETKEY)) return freqIndex;
+			else return TAG_INVALID;
 		}
 		catch (...)
 		{
@@ -170,7 +191,7 @@ int ResolveTag(const std::string& strTag)
 	return TAG_INVALID;
 }
 
- bool ConstructLayout(const std::string& str, std::vector<std::pair<int, std::string>>& vLayout)
+ bool ConstructLayout(const std::string& str, std::vector<std::pair<unsigned int, std::string>>& vLayout)
 {
 	if (str.empty()) return true;
 
@@ -192,7 +213,6 @@ int ResolveTag(const std::string& strTag)
 		{
 			if (!strBuffer.empty())
 			{
-				strBuffer.push_back('\0');
 				vLayout.push_back(std::make_pair(TAG_STRING, strBuffer));
 				strBuffer.clear();
 			}
@@ -202,10 +222,8 @@ int ResolveTag(const std::string& strTag)
 		}
 		else if (str[i] == ']' && tagActive)
 		{
-			DebugPrint("End of bracket: [%s]\n", tagBuffer.c_str());
-			tagBuffer.push_back('\0');
-			int tagType = ResolveTag(tagBuffer);
-			if (tagType == TAG_INVALID)
+			unsigned int tagType = ResolveTag(tagBuffer);
+			if ((tagType & TAG_GETKEY) == TAG_INVALID)
 			{
 				vLayout.clear();
 				return false;
@@ -224,7 +242,6 @@ int ResolveTag(const std::string& strTag)
 
 	if (!strBuffer.empty())
 	{
-		strBuffer.push_back('\0');
 		vLayout.push_back(std::make_pair(TAG_STRING, strBuffer));
 	}
 
@@ -279,13 +296,13 @@ std::string FreqToStr(double freq)
 }
 
 
-void SRSInterfacePlugin::DrawContext(const std::string& context, unsigned int radio, const SRSData* srsData, const SRSActionSettings& as)
+void SRSInterfacePlugin::DrawContext(const std::string& context, unsigned int radio, SRSData* srsData, const SRSActionSettings& as)
 {
 	std::string str;
 	if (radio < 0 || radio >= srsData->radioList.size()) return;
 
-	const SRSRadioData& radioData = srsData->radioList[radio];
-	const SRSActionSettings& radioSettings = mVisibleContexts[context];
+	SRSRadioData& radioData = srsData->radioList[radio];
+	SRSActionSettings& radioSettings = mVisibleContexts[context];
 
 
 	const std::string* bgImage = &blackImage;
@@ -304,12 +321,12 @@ void SRSInterfacePlugin::DrawContext(const std::string& context, unsigned int ra
 	}
 	mConnectionManager->SetImage(*bgImage, context, kESDSDKTarget_HardwareAndSoftware);
 
-	const std::vector<std::pair<int, std::string>>* vLayout = &as.vLayout;
+	const std::vector<std::pair<unsigned int, std::string>>* vLayout = &as.vLayout;
 	if (radioData.isRecieving && !as.vLayoutTransmission.empty()) vLayout = &as.vLayoutTransmission;
 
-	for (auto vI : *vLayout)
+	for (auto& vI : *vLayout)
 	{
-		switch (vI.first)
+		switch (vI.first & TAG_GETKEY)
 		{
 		case TAG_STRING:
 			str.append(vI.second);
@@ -321,7 +338,17 @@ void SRSInterfacePlugin::DrawContext(const std::string& context, unsigned int ra
 			str.append(std::to_string(radioData.tunedClients));
 		break;
 		case TAG_SENDERNAME:
-			if (radioData.isRecieving && radioData.sentBy.size()) parseSenderName(radioData.sentBy[0], radioSettings.removeAllSpacesInSenderName, radioSettings.regexString, radioSettings.removeSpecialCharactersInSenderName, radioSettings.senderNameLineBreakage);
+			
+			if (radioData.isRecieving && radioData.sentBy.size())
+			{
+				unsigned int timerSeconds = vI.first & TAG_GETNUMBER;
+				if (timerSeconds > 0) radioData.sentByRemainingSeconds = timerSeconds;
+				str.append(parseSenderName(radioData.sentBy, radioSettings.removeAllSpacesInSenderName, radioSettings.regexString, radioSettings.removeSpecialCharactersInSenderName, radioSettings.senderNameLineBreakage));
+			}
+			else if (radioData.sentByRemainingSeconds>0)
+			{
+				str.append(parseSenderName(radioData.sentBy, radioSettings.removeAllSpacesInSenderName, radioSettings.regexString, radioSettings.removeSpecialCharactersInSenderName, radioSettings.senderNameLineBreakage));
+			}
 		break;
 		case TAG_FREQ:
 			str.append(FreqToStr(radioData.frequency));
@@ -340,22 +367,31 @@ void SRSInterfacePlugin::DrawContext(const std::string& context, unsigned int ra
 			str.append(khz.substr(pointPos + 1));
 		}
 		break;
-		default:
+		case TAG_FREQINDEX:
 		{
-			if (vI.first < TAG_FREQINDEX) break;
 			std::string hzIndex = FreqToStr(radioData.frequency);
 			size_t pointPos = hzIndex.find('.');
-			int n = hzIndex.size() - (vI.first - TAG_FREQINDEX);
+			unsigned int n = hzIndex.size() - (vI.first & TAG_GETNUMBER);
 			if (n == pointPos) n++;
 			str.append(hzIndex.substr(n, 1));
 		}
 		}//switch
 	}//for
 
-	if (radioSettings.regexError)
+	if ((radioSettings.errorCode & ERROR_FLAG_REGEX) == ERROR_FLAG_REGEX)
 	{
 		mConnectionManager->SetTitle(str, context, kESDSDKTarget_HardwareOnly);
-		mConnectionManager->SetTitle("REGEX\nERROR", context, kESDSDKTarget_SoftwareOnly);
+		mConnectionManager->SetTitle("ERROR\nREGEX", context, kESDSDKTarget_SoftwareOnly);
+	}
+	else if ((radioSettings.errorCode & ERROR_FLAG_DEF_FIELD) == ERROR_FLAG_DEF_FIELD)
+	{
+		mConnectionManager->SetTitle(str, context, kESDSDKTarget_HardwareOnly);
+		mConnectionManager->SetTitle("ERROR\nDEF\nFIELD", context, kESDSDKTarget_SoftwareOnly);
+	}
+	else if ((radioSettings.errorCode & ERROR_FLAG_TRANS_FIELD) == ERROR_FLAG_TRANS_FIELD)
+	{
+		mConnectionManager->SetTitle(str, context, kESDSDKTarget_HardwareOnly);
+		mConnectionManager->SetTitle("ERROR\nTRANS\nFIELD", context, kESDSDKTarget_SoftwareOnly);
 	}
 	else mConnectionManager->SetTitle(str, context, kESDSDKTarget_HardwareAndSoftware);
  }
@@ -371,41 +407,12 @@ SRSInterfacePlugin::~SRSInterfacePlugin()
 }
 
 
-void SRSInterfacePlugin::SetRadioToContext(const std::string& context, const std::string& str, bool isSending, bool isReceiving, bool isSelected, bool regexError)
+void SRSInterfacePlugin::UpdateSRSData(SRSData* srsData)
 {
-	if (regexError)
+	std::scoped_lock lock(mVisibleContextsMutex);
+
+	for (auto& itemContext : mVisibleContexts)
 	{
-		mConnectionManager->SetTitle(str, context, kESDSDKTarget_HardwareOnly);
-		mConnectionManager->SetTitle("REGEX\nERROR", context, kESDSDKTarget_SoftwareOnly);
-	}
-	else mConnectionManager->SetTitle(str, context, kESDSDKTarget_HardwareAndSoftware);
-
-	const std::string* bgImage = &blackImage;
-	if (isSending)
-	{
-		bgImage = &greenImage;
-	}
-	else if (isReceiving)
-	{
-		bgImage = &redImage;
-	}
-	else if (isSelected)
-	{
-		bgImage = &blueImage;
-	}
-
-
-	mConnectionManager->SetImage(*bgImage, context, kESDSDKTarget_HardwareAndSoftware);
-}
-
-
-void SRSInterfacePlugin::UpdateSRSData(const SRSData* srsData)
-{
-	std::lock_guard<std::mutex> lock(mVisibleContextsMutex);
-
-	for (auto itemContext : mVisibleContexts)
-	{
-		//if (itemContext.second.isFrequencySetter) continue;
 		int currentRadio = itemContext.second.showSelectedRadio ? srsData->selectedRadio : itemContext.second.radioSlot;
 		DrawContext(itemContext.first, currentRadio, srsData, itemContext.second);
 	}
@@ -431,6 +438,10 @@ void SRSInterfacePlugin::KeyUpForAction(const std::string& inAction, const std::
 	}
 	else
 	{
+		// DEBUG CODE ----------------------
+		// srs_server->srsData->radioList[actionSettings.radioSlot].isRecieving = !srs_server->srsData->radioList[actionSettings.radioSlot].isRecieving;
+		// ---------------------- DEBUG CODE
+
 		if (actionSettings.showSelectedRadio) return;	// No need to select the radio when it is always selected
 		srs_server->SelectRadio(actionSettings.radioSlot);
 	}
@@ -470,16 +481,16 @@ void SRSInterfacePlugin::SendToPlugin(const std::string& inAction, const std::st
 		mVisibleContexts[inContext].vLayout.clear();
 		std::string radioAppearanceSettings = GetJSON_String(inPayload, RADIO_APPEARANCE_SETTINGS, "");
 		bool bOK = ConstructLayout(radioAppearanceSettings, mVisibleContexts[inContext].vLayout);
-		if (!bOK) mVisibleContexts[inContext].regexError = true;
-		else mVisibleContexts[inContext].regexError = false;
+		if (!bOK) mVisibleContexts[inContext].errorCode = mVisibleContexts[inContext].errorCode | ERROR_FLAG_DEF_FIELD;
+		else mVisibleContexts[inContext].errorCode = mVisibleContexts[inContext].errorCode & ~ERROR_FLAG_DEF_FIELD;
 	}
 	else if (inPayload.contains(RADIO_APPEARANCE_ON_TRANSMISSION_SETTINGS))
 	{
 		mVisibleContexts[inContext].vLayoutTransmission.clear();
 		std::string radioAppearanceOnTransmissionSettings = GetJSON_String(inPayload, RADIO_APPEARANCE_ON_TRANSMISSION_SETTINGS, "");
 		bool bOK = ConstructLayout(radioAppearanceOnTransmissionSettings, mVisibleContexts[inContext].vLayoutTransmission);
-		if (!bOK) mVisibleContexts[inContext].regexError = true;
-		else mVisibleContexts[inContext].regexError = false;
+		if (!bOK) mVisibleContexts[inContext].errorCode = mVisibleContexts[inContext].errorCode | ERROR_FLAG_TRANS_FIELD;
+		else mVisibleContexts[inContext].errorCode = mVisibleContexts[inContext].errorCode & ~ERROR_FLAG_TRANS_FIELD;
 	}
 	else if (inPayload.contains(RADIO_SLOT))
 	{
@@ -499,13 +510,12 @@ void SRSInterfacePlugin::SendToPlugin(const std::string& inAction, const std::st
 		try
 		{
 			std::regex regexCheck(mVisibleContexts[inContext].regexString);
-			mVisibleContexts[inContext].regexError = false;
+			mVisibleContexts[inContext].errorCode = mVisibleContexts[inContext].errorCode & ~ERROR_FLAG_REGEX;
 		}
 		catch (const std::regex_error& e)
 		{
 			DebugPrint("REGEX ERROR: %s\n", e.what());
-			mVisibleContexts[inContext].regexError = true;
-			mConnectionManager->SetTitle("REGEX\nERROR", inContext, kESDSDKTarget_SoftwareOnly);
+			mVisibleContexts[inContext].errorCode = mVisibleContexts[inContext].errorCode | ERROR_FLAG_REGEX;
 			mVisibleContexts[inContext].regexString = "";
 		}
 	}
@@ -525,6 +535,7 @@ void SRSInterfacePlugin::SendToPlugin(const std::string& inAction, const std::st
 	radioChange = true;
 }
 
+
 void SRSInterfacePlugin::WillAppearForAction(const std::string& inAction, const std::string& inContext, const json &inPayload, const std::string& inDeviceID)
 {
 	// Remember the context
@@ -533,6 +544,9 @@ void SRSInterfacePlugin::WillAppearForAction(const std::string& inAction, const 
 	{
 		srs_server->cancel_stop_server();
 		srs_server->start_server();
+
+		//stopSenderNameShowTimer = false;
+		//if (!tSenderNameShowTimer.joinable()) tSenderNameShowTimer = std::thread(&SRSInterfacePlugin::SenderNameShowTimer, this);
 	}
 
 	SRSActionSettings srsActionSettings;
@@ -554,14 +568,14 @@ void SRSInterfacePlugin::WillAppearForAction(const std::string& inAction, const 
 	std::string radioAppearanceSettings = GetJSON_String(payloadSettings, RADIO_APPEARANCE_SETTINGS, "");
 	srsActionSettings.vLayout.clear();
 	bool bOK = ConstructLayout(radioAppearanceSettings, srsActionSettings.vLayout);
-	if (!bOK) srsActionSettings.regexError = true;
-	else srsActionSettings.regexError = false;
+	if (!bOK) srsActionSettings.errorCode = srsActionSettings.errorCode | ERROR_FLAG_DEF_FIELD;
+	else srsActionSettings.errorCode = srsActionSettings.errorCode & ~ERROR_FLAG_DEF_FIELD;
 
 	std::string radioAppearanceOnTransmissionSettings = GetJSON_String(payloadSettings, RADIO_APPEARANCE_ON_TRANSMISSION_SETTINGS, "");
 	srsActionSettings.vLayoutTransmission.clear();
 	bOK = ConstructLayout(radioAppearanceOnTransmissionSettings, srsActionSettings.vLayoutTransmission);
-	if (!bOK) srsActionSettings.regexError = true;
-	else srsActionSettings.regexError = false;
+	if (!bOK) srsActionSettings.errorCode = srsActionSettings.errorCode | ERROR_FLAG_TRANS_FIELD;
+	else srsActionSettings.errorCode = srsActionSettings.errorCode & ~ERROR_FLAG_TRANS_FIELD;
 
 	srsActionSettings.radioSlot = GetJSON_Integer(payloadSettings, RADIO_SLOT, 1);
 	srsActionSettings.showSelectedRadio = GetJSON_Bool(payloadSettings, SHOW_SELECTED_RADIO, false);
@@ -575,11 +589,11 @@ void SRSInterfacePlugin::WillAppearForAction(const std::string& inAction, const 
 	try
 	{
 		std::regex regexCheck(srsActionSettings.regexString);
-		srsActionSettings.regexError = false;
+		srsActionSettings.errorCode = srsActionSettings.errorCode & ~ERROR_FLAG_REGEX;
 	}
 	catch (const std::regex_error& e)
 	{
-		srsActionSettings.regexError = true;
+		srsActionSettings.errorCode = srsActionSettings.errorCode | ERROR_FLAG_REGEX;
 		DebugPrint("REGEX ERROR: %s\n", e.what());
 		mConnectionManager->SetTitle("REGEX\nERROR", inContext, kESDSDKTarget_SoftwareOnly);
 		srsActionSettings.regexString = "";
@@ -591,11 +605,10 @@ void SRSInterfacePlugin::WillAppearForAction(const std::string& inAction, const 
 	radioChange = true;
 }
 
-
 void SRSInterfacePlugin::WillDisappearForAction(const std::string& inAction, const std::string& inContext, const json &inPayload, const std::string& inDeviceID)
 {
 	// Remove the context
-	std::lock_guard<std::mutex> lock(mVisibleContextsMutex);
+	std::scoped_lock lock(mVisibleContextsMutex);
 	mVisibleContexts.erase(inContext);
 	
 	if (mVisibleContexts.size() == 0)

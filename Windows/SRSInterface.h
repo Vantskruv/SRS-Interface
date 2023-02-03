@@ -9,8 +9,10 @@ class SRSRadioData
 		double frequency;
 		std::string radioName;
 		bool isRecieving = false;
-		std::vector<std::string> sentBy;
+		std::string sentBy;
 		unsigned int tunedClients = 0;
+
+		unsigned int sentByRemainingSeconds = 0;
 };
 
 class SRSData
@@ -18,7 +20,7 @@ class SRSData
 	public:
 		std::vector<SRSRadioData> radioList;
 		unsigned int selectedRadio = 0;
-		int sendingRadio = -1;
+		unsigned int sendingRadio = 0;
 };
 
 class SRSInterface
@@ -33,17 +35,24 @@ private:
 	UINT_PTR serverInSocket;
 	int wsaCode;
 
-	volatile bool isServerThreadUpdating = false;
+	std::atomic<bool> isServerThreadUpdating = false;
 
 	std::mutex mSRSData;
-	SRSData* srsData = nullptr;
+	//SRSData* srsData = nullptr;
 	bool construct_safe_data(const json& jsonData, SRSData* data);
+
+	std::condition_variable cvSenderNameShowTimer;
+	std::thread tSenderNameShowTimer;
+	std::atomic<bool> stopSenderNameShowTimer;
+	std::chrono::seconds senderNameTimeToWait;
+	void senderNameTimerThread();
 
 	std::mutex mServer;
 	void server_thread();
 	std::thread tServer; // Running the server_thread()
 
 	std::thread tStopServerDelay;
+	//std::atomic<bool> abortStoppingServer;
 	std::condition_variable cvStopServerDelay;
 	bool open_sockets();
 	void close_sockets();
@@ -54,7 +63,7 @@ private:
 
 public:
 	//static const std::string TUNED_CLIENTS;
-	
+	SRSData* srsData = nullptr;
 
 	bool start_server();
 	void stop_server_after(int seconds);
@@ -68,3 +77,5 @@ public:
 	SRSInterface(class SRSInterfacePlugin* _srsInterfacePlugin);
 	~SRSInterface();
 };
+
+

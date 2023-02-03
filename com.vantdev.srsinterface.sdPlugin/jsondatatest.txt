@@ -168,35 +168,35 @@
     },
     "RadioReceivingState": [
 		{
-            "IsReceiving": true,
+            "IsReceiving": false,
             "IsSecondary": false,
             "IsSimultaneous": false,
             "ReceivedOn": 0,
             "SentBy": "<Swetrust>GTXOla"
         },
         {
-            "IsReceiving": true,
+            "IsReceiving": false,
             "IsSecondary": false,
             "IsSimultaneous": false,
             "ReceivedOn": 1,
             "SentBy": "<Moonshine Mining> DarkMermaid"
         },
         {
-            "IsReceiving": true,
+            "IsReceiving": false,
             "IsSecondary": false,
             "IsSimultaneous": false,
             "ReceivedOn": 2,
             "SentBy": "<SexyNaked>dnobr"
         },
         {
-            "IsReceiving": true,
+            "IsReceiving": false,
             "IsSecondary": false,
             "IsSimultaneous": false,
             "ReceivedOn": 3,
             "SentBy": "<Reavers> RobHunter"
         },
         {
-            "IsReceiving": true,
+            "IsReceiving": false,
             "IsSecondary": true,
             "IsSimultaneous": false,
             "ReceivedOn": 4,

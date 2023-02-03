@@ -30,6 +30,8 @@ SRSInterface::SRSInterface(SRSInterfacePlugin* pluginCallback)
 	serverInSocket = INVALID_SOCKET;
 	clientOutSocket = INVALID_SOCKET;
 	wsaCode = WSA_INVALID_HANDLE;
+
+	senderNameTimeToWait = std::chrono::seconds(1);
 }
 
 
@@ -170,6 +172,8 @@ bool SRSInterface::start_server()
 	if (!open_sockets()) return false;
 	tServer = std::thread(&SRSInterface::server_thread, this);
 	while (!isServerThreadUpdating) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	
+	if (!tSenderNameShowTimer.joinable()) tSenderNameShowTimer = std::thread(&SRSInterface::senderNameTimerThread, this);
 
 	DebugPrint("START_SERVER: SERVER IS NOW STARTED\n");
 	return true;
@@ -182,6 +186,10 @@ void SRSInterface::stop_server()
 	isServerThreadUpdating = false;
 	close_sockets();
 	if(tServer.joinable()) tServer.join();
+
+	stopSenderNameShowTimer = true;
+	cvSenderNameShowTimer.notify_all();
+	if (tSenderNameShowTimer.joinable()) tSenderNameShowTimer.join();
 	DebugPrint("STOP_SERVER: SERVER IS STOPPED\n");
 }
 
@@ -203,6 +211,8 @@ void SRSInterface::stop_server_delay(int seconds)
 
 	if (cvStopServerDelay.wait_for(lock, std::chrono::seconds(seconds)) == std::cv_status::timeout)
 	{
+		//srsInterfacePlugin->cvStopSenderNameShowTimerThread.notify_all();
+		//if (srsInterfacePlugin->tSenderNameShowTimer.joinable()) srsInterfacePlugin->tSenderNameShowTimer.join();
 		stop_server();
 	}
 }
@@ -215,11 +225,12 @@ void SRSInterface::server_thread()
 	int RECIEVE_BUFFER_SIZE = 65507;
 	char* recieveBuffer = new char[RECIEVE_BUFFER_SIZE];
 
-	/*
+	
 	//DEBUG from file ----------------------------------
+	/*
 	std::ifstream fIn;
 	fIn.open("jsondatatest.txt", std::ifstream::in);
-
+	isServerThreadUpdating = true;
 	if (fIn.is_open())
 	{
 		std::stringstream sBuffer;
@@ -228,24 +239,23 @@ void SRSInterface::server_thread()
 
 		try
 		{
+			const json jsonBuffer = json::parse(sBuffer.str());
+			construct_safe_data(jsonBuffer, srsData);
 			while (isServerThreadUpdating)
 			{
-				const json jsonBuffer = json::parse(sBuffer.str());
-				srsInterfacePlugin->UpdateData(jsonBuffer);
 				Sleep(1000);
+				std::scoped_lock lock(mSRSData);
+				srsInterfacePlugin->UpdateSRSData(srsData);
 			}
 		}
 		catch (...)
 		{
 		};
-
 	}
-
-	delete [] recieveBuffer;
-	return;
-	-----------------------------------------------------
 	*/
+	//---------------------- DEBUG FROM FILE
 	
+
 	isServerThreadUpdating = true;
 	while (isServerThreadUpdating)
 	{
@@ -264,8 +274,7 @@ void SRSInterface::server_thread()
 			try
 			{
 				const json jsonBuffer = json::parse(recieveBuffer);
-				//srsInterfacePlugin->UpdateData(jsonBuffer);
-				std::lock_guard<std::mutex> lock(mSRSData);
+				std::scoped_lock lock(mSRSData);
 				construct_safe_data(jsonBuffer, srsData);
 				srsInterfacePlugin->UpdateSRSData(srsData);
 			}
@@ -275,112 +284,35 @@ void SRSInterface::server_thread()
 			}
 		}
 	}
+
 
 	delete [] recieveBuffer;
 	isServerThreadUpdating = false;
 }
 
-/*
-int SRSInterface::server_thread_deprecated()
+
+void SRSInterface::senderNameTimerThread()
 {
+	std::mutex localMutex;
+	std::unique_lock<std::mutex> lock(localMutex);
+	DebugPrint("STARTING SENDER NAME SHOW TIMER\n");
 
-	// Startup Winsock
-	WSADATA data;
-	WORD version = MAKEWORD(2, 2);
-	int wsOK = WSAStartup(version, &data);
-
-	if (wsOK != 0)
+	stopSenderNameShowTimer = false;
+	while (!stopSenderNameShowTimer)
 	{
-		std::cout << "Can't start Winsock! " << wsOK << std::endl;
-		return wsOK;
-	}
-
-	// Bind socket to ip address and port
-	serverInSocket = socket(AF_INET, SOCK_DGRAM, 0);
-
-	if (bind(serverInSocket, (sockaddr*)&serverInHint, sizeof(serverInHint)) == SOCKET_ERROR)
-	{
-		return WSAGetLastError();
-	}
-
-	sockaddr_in client;
-	int clientSize = sizeof(client);
-
-	int RECIEVE_BUFFER_SIZE = 65507;
-	char* recieveBuffer = new char[RECIEVE_BUFFER_SIZE];
-
-	
-
-
-	while (isServerThreadUpdating)
-	{
-		ZeroMemory(&client, clientSize);
-		ZeroMemory(recieveBuffer, RECIEVE_BUFFER_SIZE);
-		int bytesIn = recvfrom(serverInSocket, recieveBuffer, RECIEVE_BUFFER_SIZE, 0, (sockaddr*)&client, &clientSize);
-		if (bytesIn == SOCKET_ERROR)
+		if (cvSenderNameShowTimer.wait_for(lock, senderNameTimeToWait) == std::cv_status::timeout)
 		{
-			//std::cout << "Error receiving from client " << WSAGetLastError() << std::endl;
-			Sleep(1000);
-			continue;
-		}
-		//else std::cout << "Updating!" << std::endl;
-
-		if (srsInterfacePlugin)
-		{
-			try
+			std::scoped_lock lock(mSRSData);
+			for (auto& it : srsData->radioList)
 			{
-				const json jsonBuffer = json::parse(recieveBuffer);
-				//srsInterfacePlugin->UpdateData(jsonBuffer);
-				construct_safe_data(jsonBuffer, srsData);
-				srsInterfacePlugin->UpdateSRSData(srsData);
-			}
-			catch (json::parse_error& e)
-			{
-				DebugPrint(e.what());
+				if (it.sentByRemainingSeconds == 0) continue;
+				it.sentByRemainingSeconds--;
 			}
 		}
 	}
 
-	if (serverInSocket!= 0) closesocket(serverInSocket);
-	serverInSocket = 0;
-	WSACleanup();
-
-	return 0;
+	DebugPrint("SENDER NAME SHOW TIMER IS STOPPED\n");
 }
-
-
-int SRSInterface::start_server_deprecated()
-{
-	std::lock_guard<std::mutex> lock(mServer);
-	isServerThreadUpdating = false;
-	if (serverInSocket != 0) closesocket(serverInSocket);
-	if (tServer.joinable()) tServer.join();
-
-	isServerThreadUpdating = true;
-	tServer = std::thread(&SRSInterface::server_thread, this);
-	return 0;
-}
-
-
-void SRSInterface::stop_server()
-{
-	std::lock_guard<std::mutex> lock(mServer);
-	isServerThreadUpdating = false;
-	if (tServer.joinable()) tServer.join();
-	if (serverInSocket != INVALID_SOCKET) closesocket(serverInSocket);
-	serverInSocket = INVALID_SOCKET;
-	close_client_socket();
-}
-
-void SRSInterface::stop_server_deprecated()
-{
-	std::lock_guard<std::mutex> lock(mServer);
-	isServerThreadUpdating = false;
-	if (serverInSocket != 0) closesocket(serverInSocket);
-	if(tServer.joinable()) tServer.join();
-}
-*/
-
 
 
 bool SRSInterface::construct_safe_data(const json& jsonData, SRSData* data)
@@ -388,15 +320,16 @@ bool SRSInterface::construct_safe_data(const json& jsonData, SRSData* data)
 	if (!jsonData.contains("/RadioInfo/radios"_json_pointer)) return false;
 	if(!jsonData["RadioInfo"]["radios"].is_array()) return false;
 
-	data->radioList.clear();
+	data->radioList.resize(jsonData["RadioInfo"]["radios"].size());
+	unsigned int i = 0;
 	for (auto itRadio : jsonData["RadioInfo"]["radios"])
 	{
 		SRSRadioData newRadio;
 		try
 		{
-			newRadio.frequency = itRadio["freq"];
-			newRadio.radioName = itRadio["name"];
-			data->radioList.push_back(newRadio);
+			data->radioList[i].frequency = itRadio["freq"];
+			data->radioList[i].radioName = itRadio["name"];
+			i++;
 		}
 		catch (...)
 		{
@@ -451,7 +384,7 @@ bool SRSInterface::construct_safe_data(const json& jsonData, SRSData* data)
 				if (radioRecieving >= data->radioList.size() || radioRecieving<0) continue;
 
 				data->radioList[radioRecieving].isRecieving = itRecv["IsReceiving"];
-				data->radioList[radioRecieving].sentBy.push_back(sentBy);
+				data->radioList[radioRecieving].sentBy = sentBy;
 			}
 		}
 	}
@@ -465,6 +398,7 @@ bool SRSInterface::construct_safe_data(const json& jsonData, SRSData* data)
 			i++;
 		}
 	}
+
 
 	return true;
 }
