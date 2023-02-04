@@ -41,6 +41,7 @@ static const std::string SENDER_NAME_REMOVE_SPACES = "removeSpaces";
 static const std::string SENDER_NAME_REMOVE_SPECIAL_CHARACTERS = "removeSpecialCharacters";
 static const std::string SENDER_NAME_LINE_BREAKAGE = "senderNameLineBreakage";
 static const std::string RADIO_INCREMENTION = "radioIncremention";
+static const std::string RADIO_ROLLING_DIGIT = "rollingDigit";
 static const std::string RADIO_APPEARANCE_SETTINGS = "radioAppearanceSettings";
 static const std::string RADIO_APPEARANCE_ON_TRANSMISSION_SETTINGS = "radioAppearanceOnTransmissionSettings";
 
@@ -71,6 +72,7 @@ public:
 	
 	bool isFrequencySetter = false;
 	double radioIncremention = 0.025;
+	bool rollingDigit = true;
 	
 	// Radio appearance settings 
 	bool showSelectedRadio = false;
@@ -147,6 +149,39 @@ bool GetJSON_Bool(const nlohmann::json& jsonObject, const std::string& key, bool
 		DebugPrint("Error GetJSON_Bool: %s\n", e.what());
 		return defaultValue;
 	}
+}
+
+
+double RollXWithY(double X, double Y)
+{
+	if (Y == 0.0) return X;
+	//std::string strY = std::to_string(std::fabs(Y));
+	std::size_t pointPosY = std::to_string(std::fabs(Y)).find_first_not_of("0.");
+
+	if (pointPosY == 0)
+	{
+		pointPosY = (int)log10(std::fabs(Y)) + 1;
+		X = X / std::pow(10, pointPosY);
+		Y = Y / std::pow(10, pointPosY);
+		double Y_incr = X + Y;
+		if (Y_incr < 0) Y_incr = std::pow(10, pointPosY) - std::fabs(Y_incr);
+		Y_incr = Y_incr - (int)Y_incr;
+		X = (int)X + Y_incr;
+		X = X * std::pow(10, pointPosY);
+	}
+	else
+	{
+		if (pointPosY > 1) pointPosY -= 2;
+		Y = Y * std::pow(10, pointPosY);
+		X = X * std::pow(10, pointPosY);
+		double Y_incr = X + Y;
+		if (Y_incr < 0) Y_incr = std::pow(10, pointPosY) - std::fabs(Y_incr);
+		Y_incr = Y_incr - (int)Y_incr;
+		X = (int)X + Y_incr;
+		X = X / std::pow(10, pointPosY);
+	}
+
+	return X;
 }
 
 
@@ -357,23 +392,30 @@ void SRSInterfacePlugin::DrawContext(const std::string& context, unsigned int ra
 		{
 			std::string mhz = FreqToStr(radioData.frequency);
 			size_t pointPos = mhz.find('.');
-			str.append(mhz.substr(0, pointPos));
+			if(pointPos != std::string::npos) str.append(mhz.substr(0, pointPos));
 		}
 		break;
 		case TAG_FREQKHZ:
 		{
 			std::string khz = FreqToStr(radioData.frequency);
 			size_t pointPos = khz.find('.');
-			str.append(khz.substr(pointPos + 1));
+			if (pointPos != std::string::npos)
+			{
+				unsigned int n = pointPos + 1;
+				if (n < khz.size()) str.append(khz.substr(n));
+			}
 		}
 		break;
 		case TAG_FREQINDEX:
 		{
 			std::string hzIndex = FreqToStr(radioData.frequency);
 			size_t pointPos = hzIndex.find('.');
-			unsigned int n = hzIndex.size() - (vI.first & TAG_GETNUMBER);
-			if (n == pointPos) n++;
-			str.append(hzIndex.substr(n, 1));
+			if (pointPos != std::string::npos)
+			{
+				unsigned int n = hzIndex.size() - (vI.first & TAG_GETNUMBER);
+				if (n == pointPos) n++;
+				if (n < hzIndex.size()) str.append(hzIndex.substr(n, 1));
+			}
 		}
 		}//switch
 	}//for
@@ -434,7 +476,17 @@ void SRSInterfacePlugin::KeyUpForAction(const std::string& inAction, const std::
 	{
 		// Increase or decrease radio frequency
 		int radioChannel = (actionSettings.showSelectedRadio ? srs_server->GetSelectedRadio() : actionSettings.radioSlot);
-		srs_server->ChangeRadioFrequency(radioChannel, actionSettings.radioIncremention);
+		if (actionSettings.rollingDigit)
+		{
+			double frequency = 0;
+			if (srs_server->GetRadioFrequency(radioChannel, frequency))
+			{
+				double newFrequency = RollXWithY(frequency, actionSettings.radioIncremention);
+				double rollingIncremenation = newFrequency - frequency;
+				srs_server->IncrementRadioFrequency(radioChannel, rollingIncremenation);
+			}
+		}
+		else srs_server->IncrementRadioFrequency(radioChannel, actionSettings.radioIncremention);
 	}
 	else
 	{
@@ -462,6 +514,10 @@ void SRSInterfacePlugin::SendToPlugin(const std::string& inAction, const std::st
 	if (inPayload.contains(RADIO_CHANGE_FREQUENCY))
 	{
 		mVisibleContexts[inContext].isFrequencySetter = GetJSON_Bool(inPayload, RADIO_CHANGE_FREQUENCY, false);
+	}
+	else if (inPayload.contains(RADIO_ROLLING_DIGIT))
+	{
+		mVisibleContexts[inContext].rollingDigit = GetJSON_Bool(inPayload, RADIO_ROLLING_DIGIT, true);
 	}
 	else if (inPayload.contains(RADIO_INCREMENTION))
 	{
@@ -554,6 +610,8 @@ void SRSInterfacePlugin::WillAppearForAction(const std::string& inAction, const 
 		
 
 	srsActionSettings.isFrequencySetter = GetJSON_Bool(payloadSettings, RADIO_CHANGE_FREQUENCY, false);
+	srsActionSettings.rollingDigit = GetJSON_Bool(payloadSettings, RADIO_ROLLING_DIGIT, true);
+
 	try
 	{
 		std::string radioIncremention = GetJSON_String(payloadSettings, RADIO_INCREMENTION, "0.025");

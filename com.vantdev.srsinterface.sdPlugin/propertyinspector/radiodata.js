@@ -51,6 +51,9 @@ function loadConfiguration(payload)
 	let frequencyChange = document.getElementById("frequencyChange");
 	frequencyChange.checked = getProperty(payload, "frequencyChange", false);
 
+	let rollingDigit = document.getElementById("rollingDigit");
+	rollingDigit.checked = getProperty(payload, "rollingDigit", true);
+
 	let radioSlot = document.getElementById("radioSlot");
 	radioSlot.value = getProperty(payload, "radioSlot", 1);
 
@@ -59,7 +62,6 @@ function loadConfiguration(payload)
 
 	let radioAppearanceOnTransmissionSettings = document.getElementById("radioAppearanceOnTransmissionSettings");
 	radioAppearanceOnTransmissionSettings.value = getProperty(payload, "radioAppearanceOnTransmissionSettings", "");
-
 
 	let showOnlyBlackBackground = document.getElementById("showOnlyBlackBackground");
 	showOnlyBlackBackground.checked = getProperty(payload, "showOnlyBlackBackground", false)
@@ -75,6 +77,9 @@ function loadConfiguration(payload)
 		
 	let senderNameLineBreakage = document.getElementById("senderNameLineBreakage");
 	senderNameLineBreakage.value = getProperty(payload, "senderNameLineBreakage", 5);
+
+	let radioIncremention = document.getElementById("radioIncremention");
+	radioIncremention.value = getProperty(payload, "radioIncremention", 0.025);
 	
 	if(showSelectedRadio.checked)
 	{

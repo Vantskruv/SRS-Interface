@@ -43,7 +43,7 @@ private:
 
 	std::condition_variable cvSenderNameShowTimer;
 	std::thread tSenderNameShowTimer;
-	std::atomic<bool> stopSenderNameShowTimer;
+	std::atomic<bool> stopSenderNameShowTimer = false;
 	std::chrono::seconds senderNameTimeToWait;
 	void senderNameTimerThread();
 
@@ -52,11 +52,11 @@ private:
 	std::thread tServer; // Running the server_thread()
 
 	std::thread tStopServerDelay;
-	//std::atomic<bool> abortStoppingServer;
+	std::atomic<int> stopServerTimer;
 	std::condition_variable cvStopServerDelay;
 	bool open_sockets();
 	void close_sockets();
-	void stop_server_delay(int seconds);
+	void stop_server_delay();
 	void stop_server();
 
 	class SRSInterfacePlugin* srsInterfacePlugin = nullptr;	//Access to callback method UpdateData(const json& jsonData) in SRSInterfacePlugin
@@ -70,7 +70,9 @@ public:
 	void cancel_stop_server();
 
 	void SelectRadio(int radio); // Set selected radio in SRS
-	void ChangeRadioFrequency(int radio, double frequency); // Set selected radio in SRS
+	void ToggleGuard(int radio);
+	void ChangeChannel(int radio, bool increase);
+	void IncrementRadioFrequency(int radio, double frequency); // Set selected radio in SRS
 	bool GetRadioFrequency(int radio, double& frequency);
 	int GetSelectedRadio();
 	

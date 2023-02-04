@@ -125,13 +125,29 @@ void SRSInterface::SelectRadio(int radio)
 	int sendOK = sendto(clientOutSocket, s.c_str(), s.size() + 1, 0, (sockaddr*)&clientOutHint, sizeof(clientOutHint));
 }
 
-void SRSInterface::ChangeRadioFrequency(int radio, double frequency)
+void SRSInterface::ToggleGuard(int radio)
 {
 	std::lock_guard<std::mutex> lock(mServer);
 	if (clientOutSocket == INVALID_SOCKET) return;
 
+	std::string s = "{Command: 2, RadioId: " + std::to_string(radio) + "}\n";
+	int sendOK = sendto(clientOutSocket, s.c_str(), s.size() + 1, 0, (sockaddr*)&clientOutHint, sizeof(clientOutHint));
+}
+
+void SRSInterface::ChangeChannel(int radio, bool increase)
+{
+	std::lock_guard<std::mutex> lock(mServer);
+	if (clientOutSocket == INVALID_SOCKET) return;
+
+	std::string s = (increase ? "{Command: 3, RadioId: " + std::to_string(radio) + "}\n" : "{Command: 4, RadioId: " + std::to_string(radio) + "}\n");
+	int sendOK = sendto(clientOutSocket, s.c_str(), s.size() + 1, 0, (sockaddr*)&clientOutHint, sizeof(clientOutHint));
+}
+
+void SRSInterface::IncrementRadioFrequency(int radio, double frequency)
+{
+	std::lock_guard<std::mutex> lock(mServer);
+	if (clientOutSocket == INVALID_SOCKET) return;
 	
-	//std::string s = "{Command: 0, RadioId: " + std::to_string(radio) + ", Frequency: " + std::to_string(frequency) + " }\n";
 	std::ostringstream oss;
 	oss << std::fixed << std::setprecision(3) << "{Command: 0, RadioId: " << radio << ", Frequency: " << frequency << " }\n";
 	std::string s = oss.str();
@@ -140,9 +156,9 @@ void SRSInterface::ChangeRadioFrequency(int radio, double frequency)
 
 bool SRSInterface::GetRadioFrequency(int radio, double& frequency)
 {
-	std::lock_guard<std::mutex> lock(mSRSData);
+	std::scoped_lock lock(mSRSData);
 	if (radio >= srsData->radioList.size()) return false;
-	frequency = srsData->radioList[radio].frequency;
+	frequency = srsData->radioList[radio].frequency / 1000000.0;
 
 	return true;
 }
@@ -196,24 +212,29 @@ void SRSInterface::stop_server()
 
 void SRSInterface::cancel_stop_server()
 {
+	stopServerTimer = -1;
 	cvStopServerDelay.notify_all();
 	if (tStopServerDelay.joinable()) tStopServerDelay.join();
 }
 
 void SRSInterface::stop_server_after(int seconds)
 {
-	if(!tStopServerDelay.joinable()) tStopServerDelay = std::thread(&SRSInterface::stop_server_delay, this, seconds);
+	stopServerTimer = seconds;
+	if(!tStopServerDelay.joinable()) tStopServerDelay = std::thread(&SRSInterface::stop_server_delay, this);
 }
 
-void SRSInterface::stop_server_delay(int seconds)
+void SRSInterface::stop_server_delay()
 {
 	std::unique_lock<std::mutex> lock(mServer);
+	std::chrono::seconds seconds = std::chrono::seconds(1);
 
-	if (cvStopServerDelay.wait_for(lock, std::chrono::seconds(seconds)) == std::cv_status::timeout)
+	while (stopServerTimer>0)
 	{
-		//srsInterfacePlugin->cvStopSenderNameShowTimerThread.notify_all();
-		//if (srsInterfacePlugin->tSenderNameShowTimer.joinable()) srsInterfacePlugin->tSenderNameShowTimer.join();
-		stop_server();
+		if (cvStopServerDelay.wait_for(lock, seconds) == std::cv_status::timeout)
+		{
+			stopServerTimer--;
+			if (stopServerTimer == 0) stop_server();
+		}
 	}
 }
 
